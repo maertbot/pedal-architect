@@ -272,6 +272,7 @@ class TubeScreamerWDFGraph {
   constructor(config) {
     this.sampleRateHz = Math.max(config.sampleRate, 1)
     this.startupWarmupSamples = Math.max(512, Math.floor(this.sampleRateHz * 0.03))
+    this.startupAttackSamples = Math.max(128, Math.floor(this.sampleRateHz * 0.006))
     this.startupCounter = 0
     this.prevOutput = 0
     this.driveResistor = new Resistor(mapDriveToResistance(config.drive))
@@ -393,6 +394,9 @@ class TubeScreamerWDFGraph {
     const delta = safeOutput - this.prevOutput
     if (delta > maxDelta) safeOutput = this.prevOutput + maxDelta
     else if (delta < -maxDelta) safeOutput = this.prevOutput - maxDelta
+
+    const attack = Math.min(1, this.startupCounter / this.startupAttackSamples)
+    safeOutput *= attack
 
     this.prevOutput = safeOutput
     return safeOutput
