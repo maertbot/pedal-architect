@@ -35,7 +35,7 @@ export class AudioEngine {
     if (this.context) return
 
     this.context = new AudioContext({ latencyHint: 'interactive' })
-    this.inputGain = new GainNode(this.context, { gain: 0.65 })
+    this.inputGain = new GainNode(this.context, { gain: 0 })
     this.outputGain = new GainNode(this.context, { gain: 0.95 })
     this.analyser = new AnalyserNode(this.context, {
       fftSize: 2048,
@@ -64,8 +64,14 @@ export class AudioEngine {
       buffer: this.createSyntheticLoop(this.currentPreset),
       loop: true,
     })
+
+    const now = this.context.currentTime
+    this.inputGain.gain.cancelScheduledValues(now)
+    this.inputGain.gain.setValueAtTime(0, now)
+    this.inputGain.gain.linearRampToValueAtTime(0.65, now + 0.02)
+
     this.source.connect(this.inputGain)
-    this.source.start()
+    this.source.start(now)
   }
 
   stop(): void {
@@ -82,6 +88,12 @@ export class AudioEngine {
     }
     this.source = null
     this.playing = false
+
+    if (this.context && this.inputGain) {
+      const now = this.context.currentTime
+      this.inputGain.gain.cancelScheduledValues(now)
+      this.inputGain.gain.setValueAtTime(0, now)
+    }
   }
 
   setCircuit(circuitId: string): void {
