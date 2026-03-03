@@ -13,6 +13,78 @@
 
 ---
 
+## Execution Model
+
+### Roles
+
+**Opus (orchestrator + taste):** Runs each CE: Brainstorm, CE: QA, and CE: Review step. Makes all architectural decisions, design direction, and quality judgments. Writes the prompts that Codex receives. Does NOT write implementation code directly.
+
+**Codex gpt-5.3 (builder):** Receives a detailed CE: Plan + CE: Work prompt from Opus and executes autonomously. Writes all implementation code, tests, and build verification. Reports back with commit hash + test results.
+
+### Workflow Per Phase
+
+```
+Opus: CE: Brainstorm     → explore approaches, risks, research
+Opus: CE: QA             → quality gate (plain-language for non-SWE stakeholder)
+Opus: CE: Plan           → detailed task spec for Codex
+      ↓ (hand off to Codex)
+Codex: CE: Work          → implement code, write tests, run build
+      ↓ (Codex reports back)
+Opus: CE: Review         → verify tests pass, visual QA, design quality gate
+Opus: CE: Compound       → document lessons in DEV-NOTES.md
+```
+
+### Design Skills (mandatory for all UI work)
+
+Two design skill protocols govern all visual/UI decisions in this project. Load and follow them during any phase that touches UI components.
+
+#### Frontend Design Skill
+**Purpose:** Ensure production-grade, distinctive interfaces that avoid generic AI aesthetics.
+
+Before any UI coding, commit to a BOLD aesthetic direction:
+- **Purpose**: What problem does this interface solve? Who uses it?
+- **Tone**: Commit to an extreme. For Pedal Architect, the established direction is **tactical hardware / NASA mission control** — matte black surfaces, phosphor displays, precision instruments.
+- **Differentiation**: What makes this UNFORGETTABLE?
+
+Requirements for all UI work:
+- Typography: distinctive, characterful choices (JetBrains Mono is established; pair with a display font for headers if adding new sections)
+- Color: dominant dark with sharp accents. Existing palette (#0a0a0a / #ff2020 / #ffb020 / #20ff60) is the foundation — extend, don't replace
+- Motion: high-impact moments. One orchestrated reveal > scattered micro-interactions. Signal flow animation, bypass toggle transitions, learn mode step transitions
+- Spatial composition: unexpected layouts welcome. Asymmetry, overlap, grid-breaking elements where they serve the experience
+- Backgrounds: create atmosphere and depth. Noise textures, subtle grid patterns, layered transparencies — NOT flat solid backgrounds
+- **NEVER**: Inter/Roboto/Arial, purple gradients, cookie-cutter component patterns, generic card layouts
+
+#### Make Good Art Skill
+**Purpose:** Ensure visual elements are intentionally designed, not one-shot mediocre outputs.
+
+For any significant visual component (topology diagrams, learn mode UI, signal flow animations):
+1. **Intent first**: What should the viewer see first? What mood/energy? What's the attention hierarchy?
+2. **Generate options**: Never solve on first try for visual design. Propose 2-3 directions, choose the strongest.
+3. **Value structure**: Dominant dark theme means the value plan is critical — where do the bright accents live? Reserve strongest contrast for focal elements (active components, signal flow, experiment targets).
+4. **Quality gates**: Every visual component must pass:
+   - 3-second read test (can user understand the view in 3 seconds?)
+   - Figure/ground separation (components readable against background?)
+   - Attention hierarchy (eye goes where intended?)
+   - Mobile distance read (works at phone arm's length?)
+
+These skills apply during CE: Brainstorm (design direction), CE: Plan (design specs for Codex), and CE: Review (visual QA gates).
+
+### CE: QA — Non-SWE Stakeholder Gate (mandatory every phase)
+
+The project owner has no software engineering experience. Every phase includes a CE: QA step BEFORE coding begins. This step must:
+
+1. **Explain in plain language** what will be built, what it will look/sound like, and how the user will interact with it
+2. **Surface risks honestly** — what might not work, what's hard, what we're uncertain about
+3. **Provide concrete "done" criteria** that a non-engineer can verify:
+   - "You'll open the app, select Tube Screamer (WDF), and hear distorted guitar tone"
+   - "You'll click on the diode symbol and hear the tone go clean"
+   - NOT: "unit tests pass and the AudioWorklet initializes correctly"
+4. **Ask for go/no-go** before proceeding to CE: Work
+
+Format the QA as a conversation, not a report. Use analogies. If something is risky, say so.
+
+---
+
 ## Architecture Overview
 
 ### What is WDF (Wave Digital Filters)?
@@ -108,23 +180,37 @@ interface CircuitRuntime {
 
 New WDF circuits will implement the same `CircuitModel` interface but return a `CircuitRuntime` backed by an AudioWorkletNode instead of raw Web Audio nodes. Existing circuits are untouched.
 
----
-
-## Compound Engineering Process
-
-Each phase follows this cycle:
-1. **CE: Brainstorm** — explore approaches, identify risks
-2. **CE: QA** — initial quality gate (especially important since the stakeholder has no SWE experience)
-3. **CE: Plan** — detailed implementation steps
-4. **CE: Work** — write code, run tests
-5. **CE: Review** — lint, test, build, visual QA
-6. **CE: Compound** — document lessons learned, update DEV-NOTES.md
+### Established Visual Aesthetic:
+- **Theme:** Tactical hardware / NASA mission control
+- **Background:** Matte black `#0a0a0a`
+- **Typography:** JetBrains Mono (monospace throughout)
+- **Accent colors:** Red `#ff2020` (active/danger), Amber `#ffb020` (warm/warning), Phosphor green `#20ff60` (displays/oscilloscope)
+- **Surface treatments:** Subtle noise texture on panels, precision grid lines, high-contrast instrument-style controls
+- **Motion:** Phosphor glow effects, CRT-style scan lines on oscilloscope, smooth parameter transitions
 
 ---
 
 ## Phase 1: WDF Core Engine + AudioWorklet + Tube Screamer
 
-**Goal:** Build the WDF framework, wire it into AudioWorklet, and port the Tube Screamer as the first component-level circuit. This phase proves the entire architecture end-to-end.
+**Goal:** Build the WDF framework, wire it into AudioWorklet, and port the Tube Screamer as the first component-level circuit. This phase proves the entire architecture end-to-end. Phase 1 is purely audio engineering — no new UI components (that's Phase 2).
+
+### CE: QA Gate (for non-SWE stakeholder)
+
+**What you're building in plain language:**
+Right now, the Tube Screamer in the app is like a photo of a Tube Screamer — it looks roughly right and sounds kinda like one, but it's a flat image. What we're building is a working replica of the actual circuit inside a Tube Screamer, where every resistor, capacitor, and diode is modeled as a real electronic component. The audio passes through each component just like electricity flows through the real pedal.
+
+**What you'll be able to verify when done:**
+1. Open the app → you'll see a new "Tube Screamer (WDF)" option in the circuit selector alongside the existing one
+2. Select it, press play → you'll hear distorted guitar tone (it should sound noticeably different from the legacy version — more organic, more responsive)
+3. Turn the Drive knob → the distortion character changes smoothly
+4. Turn the Tone knob → brightness changes
+5. The existing 12 circuits all still work exactly as before
+
+**What's hard / risky:**
+- WDF math is non-trivial (wave scattering, Newton-Raphson solver for diodes). If Codex gets the math wrong, it'll either produce silence, white noise, or unstable feedback. We verify with automated tests that check for silence/noise/instability.
+- AudioWorklet has browser quirks (Safari is finicky). Chrome/Firefox are the priority; Safari is Phase 5.
+
+**If this phase fails:** We'll know within the first test run. The math either produces audio or it doesn't — there's no ambiguous middle ground.
 
 ### 1A: WDF Primitives Library
 **Files:** `src/audio/wdf/elements.ts`, `src/audio/wdf/adaptors.ts`, `src/audio/wdf/types.ts`
@@ -239,7 +325,51 @@ interface WDFComponentMeta {
 
 ## Phase 2: Interactive Circuit Topology Visualization + Bypass Controls
 
-**Goal:** Build an interactive signal flow diagram that shows every component in the WDF circuit. Users can click components to see info and toggle bypass.
+**Goal:** Build an interactive signal flow diagram that shows every component in the WDF circuit. Users can click components to see info and toggle bypass. This is the first major UI phase — **Frontend Design Skill and Make Good Art Skill are mandatory here.**
+
+### CE: QA Gate (for non-SWE stakeholder)
+
+**What you're building in plain language:**
+Think of the circuit diagram on the back of a guitar pedal's box — but alive. Each component (resistor, capacitor, diode) is an interactive element you can click. Click a diode → an info panel tells you what it does. Toggle the bypass switch → that component gets removed from the circuit and you hear the difference instantly. Little signal meters pulse on each component showing how much audio is flowing through it.
+
+**What you'll be able to verify when done:**
+1. Select the WDF Tube Screamer → below the knobs, you'll see a signal flow diagram showing the actual circuit path
+2. Components glow phosphor green when active, go dim gray when bypassed
+3. Hover over any component → tooltip shows name and real-world value ("1N914 Silicon Diode")
+4. Click a component → info panel slides in explaining what it does
+5. Toggle bypass → you hear the change immediately AND the diagram updates
+6. Signal level meters pulse in time with the audio
+7. On mobile, everything stacks vertically and remains readable
+
+**What's hard / risky:**
+- SVG schematic symbols need to look professional, not amateur. If they look like a high school electronics worksheet, the whole feature feels cheap. The Make Good Art quality gates will catch this.
+- Signal level meters need to be smooth (no jank) while receiving data from the audio thread. If they stutter, it breaks the "live instrument" feel.
+
+### Design Direction (Frontend Design + Make Good Art)
+
+**Aesthetic concept: "X-Ray Oscilloscope"**
+The topology view should feel like looking INSIDE the pedal through an oscilloscope — as if you've removed the enclosure cover and can see the components glowing on the PCB. Think: high-end test equipment display, not a textbook circuit diagram.
+
+**Attention hierarchy:**
+1. FIRST: Signal flow path (animated phosphor green trace, brightest element)
+2. SECOND: Active component being inspected (highlight glow, info panel)
+3. THIRD: Component symbols and labels (readable but not competing)
+4. FOURTH: Signal level meters (subtle, peripheral awareness)
+
+**Value structure:**
+- Background: deep black (#0a0a0a) with subtle PCB-trace grid pattern at very low opacity
+- Active components: phosphor green (#20ff60) with soft glow (box-shadow/filter)
+- Bypassed components: #333 with dashed outline — clearly "off" without being invisible
+- Signal flow trace: animated dash-array, phosphor green, slight bloom effect
+- Info panel: dark surface (#111) with amber (#ffb020) accent border, smooth slide-in transition
+- Bypass toggle: red (#ff2020) when active → gray when bypassed, satisfying click animation
+
+**Quality gates (must pass before shipping):**
+- 3-second read: Can a new user understand "this is the signal path, these are components" in 3 seconds?
+- Figure/ground: Every component clearly readable against the dark background?
+- Attention hierarchy: Eye drawn to signal flow first, then highlighted component?
+- Mobile distance read: Component symbols distinguishable on a phone at arm's length?
+- NASA Mission Control test: Does this look like it belongs on a control panel, not in a textbook?
 
 ### 2A: Circuit Topology Data Structure
 **File:** `src/audio/wdf/topology.ts`
@@ -271,26 +401,32 @@ interface CircuitTopology {
 
 - SVG-based signal flow diagram
 - Each component rendered as a schematic-style symbol (resistor zigzag, capacitor plates, diode triangle, op-amp triangle)
-- Signal flow animated with a subtle pulse/glow traveling left-to-right
-- Bypassed components shown grayed out with a dashed outline
-- Active component highlighted on hover with tooltip showing name + value
+- Signal flow animated with a subtle pulse/glow traveling left-to-right (CSS animation on stroke-dasharray)
+- Bypassed components shown grayed out with dashed outline
+- Active component highlighted on hover with tooltip (name + value)
 - Click a component → info panel slides in from right (component name, description, real-world value)
 - Click bypass toggle → sends message to AudioWorklet → audio changes immediately
+- Component symbols must be crisp and professional — reference real schematic symbol standards (IEEE Std 315)
 
-Visual style: match existing app aesthetic (matte black `#0a0a0a`, JetBrains Mono, red accent `#ff2020`, amber `#ffb020`). Component symbols in a phosphor green (`#20ff60`) when active, dim gray when bypassed.
+**Design requirements (from Frontend Design Skill):**
+- Motion: signal flow animation is THE signature moment. Invest in making it feel alive — subtle phosphor bloom, animated dash traveling left-to-right, gentle pulse on each component as signal passes through
+- Spatial composition: the signal path should dominate the view. Component labels secondary. Stage labels (Input → Clipping → Tone → Output) as subtle zone markers, not heavy borders
+- Background: subtle PCB-trace grid pattern, very low opacity (#1a1a1a lines on #0a0a0a)
+- Typography: JetBrains Mono for labels, slightly smaller weight. Component values in amber, names in white
+- Bypass toggle: compact, high-contrast. Red dot when active, gray when bypassed. Satisfying scale transition on click
 
 **Tests:**
 - Render test: TopologyRenderer mounts without errors for Tube Screamer WDF
 - Interaction test: clicking bypass toggle sends correct message to AudioWorklet
-- Visual QA: screenshot at 1440px desktop + 375px mobile
+- Visual QA: screenshot at 1440px desktop + 375px mobile, run through all 4 Make Good Art quality gates
 
 ### 2C: Real-Time Signal Level Indicators
 **Files:** extend `WDFProcessor.ts`, add `src/components/circuit-lab/SignalMeter.tsx`
 
 - Worklet tracks RMS signal level at each component's output
 - Reports levels back to main thread via `port.postMessage()` at ~15fps (every ~2940 samples)
-- UI shows small level meters on each component node in the topology view
-- When a component is bypassed, its meter shows the "before" level passing through
+- UI shows small level meters on each component node in the topology view — styled as tiny phosphor bar graphs
+- When a component is bypassed, its meter flatlines with a dim "no signal" indicator
 
 **Tests:**
 - Unit test: RMS calculation produces correct value for known sine wave
@@ -299,17 +435,38 @@ Visual style: match existing app aesthetic (matte black `#0a0a0a`, JetBrains Mon
 ### Phase 2 Verification Checklist
 - [ ] All tests pass
 - [ ] Lint + build clean
+- [ ] Visual QA: 3-second read test passes
+- [ ] Visual QA: figure/ground separation clear
+- [ ] Visual QA: attention hierarchy correct (flow → component → labels → meters)
+- [ ] Visual QA: mobile distance read passes (375px)
+- [ ] Visual QA: NASA Mission Control aesthetic test passes
 - [ ] Manual: Tube Screamer WDF shows interactive signal flow diagram
 - [ ] Manual: clicking a component shows its info
 - [ ] Manual: toggling bypass on clipping diodes produces audible change + visual update
 - [ ] Manual: signal level meters animate while audio plays
-- [ ] Manual: mobile layout (375px) is usable
 
 ---
 
 ## Phase 3: Big Muff + Klon Centaur WDF Models
 
-**Goal:** Port the remaining two circuits to WDF with full component-level topology.
+**Goal:** Port the remaining two circuits to WDF with full component-level topology. Audio engineering + topology data — reuses Phase 2's renderer.
+
+### CE: QA Gate (for non-SWE stakeholder)
+
+**What you're building in plain language:**
+Same thing we did for the Tube Screamer, but for two more pedals. The Big Muff is famous for its "wall of fuzz" — it runs the signal through FOUR separate clipping stages (like four Tube Screamers in a row, roughly). You'll be able to bypass each stage one at a time and hear the fuzz build up. The Klon Centaur is the "transparent overdrive" — its trick is mixing clean guitar signal with driven signal so you never lose note clarity. You'll be able to mute the clean path and hear how it loses that transparency.
+
+**What you'll be able to verify when done:**
+1. Three WDF circuits available in the selector, each with interactive topology diagrams
+2. Big Muff: toggle clipping stages off one by one → hear the fuzz thin out progressively
+3. Big Muff: toggle the tone stack → mid-scoop disappears, tone becomes flat
+4. Klon: toggle the clean blend path → sound loses its "transparent" character
+5. Klon: low gain sounds mostly clean with sparkle; high gain sounds overdriven but note definition remains
+6. All 12 legacy circuits still work perfectly
+
+**What's hard / risky:**
+- Big Muff has 4 cascaded clipping stages — the WDF tree structure gets deeper. If Newton-Raphson convergence is slow on 4 series stages, we may need to increase iteration limits (costs CPU).
+- Klon's parallel clean/drive blend is architecturally different from the other two. The WDF tree needs to split and rejoin — this is a "multi-path" topology that's harder than series chains.
 
 ### 3A: Big Muff Pi WDF Model
 **File:** `src/audio/wdf/circuits/bigMuffWDF.ts`
@@ -357,7 +514,7 @@ Component topology:
 7. **Output buffer** — output level pot
 
 Key research references:
-- ElectroSmash Klon analysis: https://www.electrosmash.com/klon-centaur-analysis  
+- ElectroSmash Klon analysis: https://www.electrosmash.com/klon-centaur-analysis
 - The clean blend is what makes it "transparent" — even at high gain, the clean fundamental comes through
 
 **Tests:**
@@ -370,6 +527,7 @@ Key research references:
 ### 3C: Circuit Registration + UI Updates
 - Register `big-muff-wdf` and `klon-centaur-wdf` in CIRCUITS array
 - All three WDF circuits get `engine: 'wdf'` badge in selector UI
+- Topology diagrams for Big Muff and Klon use same renderer from Phase 2, just with their own topology data
 - Frequency response chart works with WDF circuits (may need to compute analytically from WDF element values rather than reading BiquadFilterNode properties — adapt `frequencyResponse.ts`)
 
 **Tests:**
@@ -380,16 +538,97 @@ Key research references:
 ### Phase 3 Verification Checklist
 - [ ] All tests pass
 - [ ] Lint + build clean
-- [ ] Manual: Big Muff WDF — four clipping stages visible, mid-scoop audible
-- [ ] Manual: Klon WDF — clean blend audible, transparency at low gain
+- [ ] Manual: Big Muff WDF — four clipping stages visible in topology, mid-scoop audible
+- [ ] Manual: Klon WDF — clean blend path visible, transparency audible at low gain
 - [ ] Manual: all 3 WDF circuits have interactive topology with bypass
 - [ ] Manual: existing 12 legacy circuits unaffected
+- [ ] Visual QA: Big Muff topology readable despite more components (4 stages)
+- [ ] Visual QA: Klon parallel paths (clean + drive) visually clear
 
 ---
 
 ## Phase 4: Learn Mode Tab
 
-**Goal:** Build the educational "Learn" tab — step-by-step walkthroughs that teach users what each component does and WHY, with interactive experiments.
+**Goal:** Build the educational "Learn" tab — step-by-step walkthroughs that teach users what each component does and WHY, with interactive experiments. This is the second major UI phase — **Frontend Design Skill and Make Good Art Skill are mandatory.**
+
+### CE: QA Gate (for non-SWE stakeholder)
+
+**What you're building in plain language:**
+A guided tour of each pedal's insides. Imagine a museum audio guide, but for guitar circuits. You step through explanations like "This is the clipping stage — these two diodes are what give the Tube Screamer its sound. Press the bypass button and listen to what happens when you remove them." At each step, the relevant component lights up in the diagram, and you can experiment by toggling things on and off.
+
+**What you'll be able to verify when done:**
+1. New "Learn" tab appears alongside Circuit Lab and Enclosure Designer
+2. Select a circuit → you get a step-by-step walkthrough (8 steps for Tube Screamer, 7 each for Big Muff and Klon)
+3. Each step highlights the relevant component in the circuit diagram
+4. Steps with experiments show an "Experiment" panel: "Toggle the diodes and listen for the change"
+5. Audio plays throughout so you hear changes as you progress
+6. A "Reset" button restores everything to normal
+7. Works on mobile (stacked layout)
+
+**What's hard / risky:**
+- The narration has to be genuinely good — educational but not boring, accessible but not dumbed-down. Bad writing kills this feature. The content targets curious musicians AND EE students.
+- Coordinating audio state + visual state + lesson state across three systems. If they get out of sync (diagram shows component bypassed but audio doesn't reflect it), the educational value collapses.
+
+### Design Direction (Frontend Design + Make Good Art)
+
+**Aesthetic concept: "The Apprentice's Workbench"**
+The Learn mode should feel like sitting at a master builder's bench with the pedal opened up in front of you and a knowledgeable mentor explaining each part. Warm but precise. Think: well-lit workbench in an otherwise dark workshop, spotlight on the circuit.
+
+**Attention hierarchy:**
+1. FIRST: The circuit topology diagram with highlighted component (this is what you're learning about)
+2. SECOND: The narration text (what you're reading/understanding)
+3. THIRD: The experiment panel (what you're doing)
+4. FOURTH: Navigation (step indicators, forward/back)
+
+**Layout concept (desktop):**
+```
+┌─────────────────────────────────────────────────────┐
+│  [Step 3 of 8]  ● ● ◉ ○ ○ ○ ○ ○    [Reset] [Exit] │
+├──────────────┬──────────────────────┬───────────────┤
+│              │                      │               │
+│  NARRATION   │   CIRCUIT TOPOLOGY   │  EXPERIMENT   │
+│              │   (highlighted       │  PANEL        │
+│  "The        │    component glows)  │               │
+│   clipping   │                      │  🔴 Bypass    │
+│   stage..."  │                      │  Diodes       │
+│              │                      │               │
+│  ◄ Back      │                      │  "Listen for  │
+│     Next ►   │                      │   the change" │
+│              │                      │               │
+└──────────────┴──────────────────────┴───────────────┘
+```
+
+**Layout concept (mobile, stacked):**
+```
+┌─────────────────────┐
+│ Step 3 of 8  ● ● ◉  │
+├─────────────────────┤
+│ "The clipping       │
+│  stage..."          │
+├─────────────────────┤
+│  CIRCUIT TOPOLOGY   │
+│  (scrollable,       │
+│   component glows)  │
+├─────────────────────┤
+│  🔴 Bypass Diodes   │
+│  "Listen for..."    │
+├─────────────────────┤
+│  ◄ Back    Next ►   │
+└─────────────────────┘
+```
+
+**Visual polish requirements:**
+- Step transition: smooth crossfade on narration text, topology highlight slides to new component (not instant jump)
+- Progress indicator: small dots, current step filled with amber (#ffb020), completed steps dimmer
+- Experiment panel: distinct surface (slightly lighter than background, maybe #141414) with red accent border when experiment is active
+- Narration typography: JetBrains Mono but at comfortable reading size (15-16px), generous line height (1.6), warm white (#e8e8e8) not pure white
+- "Highlighted component" effect: bright phosphor green glow + subtle pulsing animation, connected traces brighter, rest of diagram dims slightly
+
+**Quality gates (must pass):**
+- 3-second read: User understands "I'm in a guided lesson, this is step 3, that component is highlighted" instantly
+- Reading comfort: narration text is comfortable to read for 2-3 paragraphs without eye strain (dark theme typography is hard — test it)
+- Experiment clarity: user knows what to do and what to listen for without confusion
+- Mobile: everything accessible without horizontal scrolling, experiment panel not cramped
 
 ### 4A: Learn Mode Data Structure
 **File:** `src/data/learn/types.ts`, `src/data/learn/tubeScreamer.ts`, etc.
@@ -426,13 +665,12 @@ interface CircuitLesson {
 **Files:** `src/components/learn/LearnTab.tsx`, `src/components/learn/LearnStepper.tsx`, `src/components/learn/ExperimentPanel.tsx`
 
 - New "Learn" tab alongside existing "Circuit Lab" and "Enclosure Designer" tabs
-- Left panel: step-by-step narration with forward/back navigation
-- Center: circuit topology view (reuse Phase 2 component) with current step's components highlighted
-- Right: experiment panel when a step has an interactive experiment
+- Three-column layout (desktop): narration | topology | experiment
+- Stacked layout (mobile): narration → topology → experiment → nav
 - Audio auto-plays so user can hear changes as they progress through steps
 - Bypassed components visually dim + audio reflects bypass state
 - "Reset" button restores all components to active state
-- Mobile: stacked layout (narration → topology → experiment)
+- Step transitions animated (crossfade text, slide highlight)
 
 ### 4C: Lesson Content for All Three Circuits
 
@@ -468,20 +706,37 @@ interface CircuitLesson {
 - Unit test: each lesson has valid component references (all IDs exist in topology)
 - Render test: LearnTab mounts, step navigation works
 - Integration test: advancing steps applies correct bypass states
-- Visual QA: screenshots at desktop + mobile
+- Visual QA: screenshots at desktop + mobile, run through all Make Good Art quality gates
 
 ### Phase 4 Verification Checklist
 - [ ] All tests pass
 - [ ] Lint + build clean
+- [ ] Visual QA: 3-second read test passes for Learn tab
+- [ ] Visual QA: reading comfort test passes (dark theme typography)
+- [ ] Visual QA: experiment clarity test passes
+- [ ] Visual QA: mobile layout test passes (375px, no horizontal scroll)
+- [ ] Visual QA: step transitions are smooth, not jarring
 - [ ] Manual: Learn tab loads, Tube Screamer lesson plays through all 8 steps
-- [ ] Manual: bypass experiments produce audible changes
-- [ ] Manual: Big Muff + Klon lessons complete
-- [ ] Manual: mobile layout works
+- [ ] Manual: bypass experiments produce audible changes synchronized with visual changes
+- [ ] Manual: Big Muff + Klon lessons complete and all experiments work
 - [ ] Manual: can switch between Learn tab and Circuit Lab without breaking audio
 
 ---
 
-## Phase 5: Polish, Performance, Deploy
+## Phase 5: Polish, Performance, A/B Comparison, Deploy
+
+**Goal:** Performance optimization, cross-browser testing, the A/B comparison feature, and final deploy. Light UI work — Frontend Design Skill applies to the A/B toggle and WDF badge design.
+
+### CE: QA Gate (for non-SWE stakeholder)
+
+**What you're building in plain language:**
+Final polish. The A/B comparison is the crowd-pleaser: a toggle button that instantly switches between our component-level model and the old approximation, so you can hear exactly how much better the new engine sounds. Plus performance tuning (making sure it doesn't drain your phone battery) and making it work across browsers.
+
+**What you'll be able to verify when done:**
+1. A/B button on WDF circuits: click to toggle between WDF and legacy engine, hear the difference
+2. App runs smoothly on Chrome and Firefox (no audio glitches, no UI stutter)
+3. README on GitHub describes the WDF engine and Learn mode
+4. Live site updated at maertbot.github.io/pedal-architect
 
 ### 5A: Performance Audit
 - Profile AudioWorklet CPU usage with Chrome DevTools
@@ -489,27 +744,31 @@ interface CircuitLesson {
 - If needed, optimize hot loops (pre-compute scattering matrices, avoid allocations in process())
 
 ### 5B: Visual Polish
-- Circuit selector shows WDF badge with "Component-Level" label
-- Smooth transitions between Learn mode steps
-- Topology view zoom/pan for complex circuits (Big Muff has many nodes)
-- Loading state while AudioWorklet module initializes
+- WDF circuit selector badge: "Component-Level" label with subtle phosphor green border, distinguishes from legacy circuits
+- Loading state while AudioWorklet module initializes (brief spinner or "Initializing audio engine..." overlay)
+- Smooth transitions between Learn mode steps (refine based on Phase 4 QA feedback)
+- Topology view: if Big Muff diagram feels cramped, add horizontal scroll/zoom
 
-### 5C: A/B Comparison Feature (Bonus)
-- "Compare" button in WDF circuits: toggles between WDF engine and legacy Web Audio chain
-- Lets user hear the fidelity difference
-- Shows which components the legacy version was approximating vs modeling
+### 5C: A/B Comparison Feature
+- "Compare" toggle on WDF circuits: switches between WDF engine and legacy Web Audio chain in real time
+- Toggle styled as a hardware switch (satisfying click animation, red/green state indicator)
+- Brief label: "WDF" vs "Legacy" with subtle engine description
+- Lets user hear the fidelity difference directly
+- Shows which components the legacy version was approximating vs actually modeling
 
 ### 5D: Final QA + Deploy
 - Full regression test: all 12 legacy + 3 WDF circuits
-- Browser compatibility: Chrome, Firefox, Safari (AudioWorklet support)
+- Browser compatibility: Chrome, Firefox (Safari is stretch goal — AudioWorklet support varies)
 - Deploy to GitHub Pages
-- Update README with feature description
+- Update README with feature description, screenshots, architecture overview
 
 ### Phase 5 Verification Checklist
 - [ ] Performance: AudioWorklet CPU < 50% budget
 - [ ] All tests pass across phases 1-4
+- [ ] A/B comparison works on all 3 WDF circuits
+- [ ] Chrome + Firefox compatibility verified
 - [ ] Production build clean, deployed to GitHub Pages
-- [ ] README updated
+- [ ] README updated with screenshots and feature description
 
 ---
 
@@ -529,35 +788,39 @@ interface CircuitLesson {
 
 ### Existing Repo Context
 - **Repo:** https://github.com/maertbot/pedal-architect
+- **Live:** https://maertbot.github.io/pedal-architect/
 - **Deploy command:** `npm run build && npx gh-pages -d dist`
 - **Stack:** React 19 + TypeScript + Vite + Zustand + Web Audio API
 - **Current circuits:** 12 total (6 original + 6 added), all using Web Audio chain approach
-- **Aesthetic:** Matte black (#0a0a0a), JetBrains Mono, red (#ff2020), amber (#ffb020), phosphor green (#20ff60)
-
-### Compound Engineering Protocol
-Follow CE workflow for each phase:
-1. **CE: Brainstorm** — explore approaches, identify risks, research unknowns
-2. **CE: QA** — initial quality gate before coding (especially for non-SWE stakeholder)
-3. **CE: Plan** — detailed task breakdown with file paths
-4. **CE: Work** — implement, write tests, iterate
-5. **CE: Review** — lint/test/build verification + visual QA
-6. **CE: Compound** — document lessons learned in DEV-NOTES.md
+- **Visual aesthetic:** Tactical hardware / NASA mission control — matte black (#0a0a0a), JetBrains Mono, red (#ff2020), amber (#ffb020), phosphor green (#20ff60)
 
 ---
 
 ## How To Use This Document
 
-This PRD is designed for **context-window-sized work sessions**:
+This PRD is designed for **context-window-sized work sessions**. Each phase follows the CE workflow with Opus orchestrating and Codex coding.
 
-1. **Start Phase 1** by pasting this entire document into a fresh context, then say: "Execute Phase 1 of this PRD using the Compound Engineering workflow. Start with CE: Brainstorm."
-2. When Phase 1 is complete and all verification checklist items pass, **start a new context** and paste this document again with: "Phase 1 is complete. Execute Phase 2."
-3. Repeat for Phases 3-5.
+### Starting a phase:
 
-Each phase is self-contained with its own tests and verification checklist. The document provides all the context needed to pick up from any phase.
+Paste this entire document into a fresh context, then say:
 
-**Important:** After completing each phase:
-- Commit all changes with a descriptive message
-- Push to origin/main
-- Deploy to GitHub Pages (`npm run build && npx gh-pages -d dist`)
-- Update this document's checklist items with ✅
-- Log any lessons learned in DEV-NOTES.md
+> "Execute Phase [N] of this PRD. Follow the Compound Engineering workflow. Start with CE: Brainstorm. Use the Codex model (gpt-5.3-codex) for all implementation coding. Run the CE: QA gate before handing off to Codex. Apply the Frontend Design Skill and Make Good Art Skill for any UI work (Phases 2, 4, 5)."
+
+### Phase completion protocol:
+
+After completing each phase:
+1. All verification checklist items pass ✅
+2. Commit all changes with a descriptive message
+3. Push to origin/main
+4. Deploy to GitHub Pages (`npm run build && npx gh-pages -d dist`)
+5. Update this document's checklist items
+6. Log lessons learned in DEV-NOTES.md
+7. Notify the user with: what was built, commit hash, verification results, and link to live site
+
+### If a phase fails:
+
+If Codex produces broken output:
+1. Document what failed and why in DEV-NOTES.md
+2. Fix the specific failure (don't restart the whole phase)
+3. Re-run the failing tests
+4. If fundamentally broken (architecture doesn't work), escalate to the user before burning more tokens
