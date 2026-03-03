@@ -40,3 +40,12 @@
 ## Dependency Verification
 - Ran `curl -sI` checks for every npm dependency/devDependency URL from `package.json` against `https://registry.npmjs.org/<pkg>`.
 - Result: all package URLs returned `HTTP/2 200` (no 404s).
+
+## Big Muff Mid-Scoop Validation
+- Added `scripts/validate-big-muff-response.mjs` to sanity-check the modeled tone stack shape.
+- Run: `node scripts/validate-big-muff-response.mjs`
+- Expected relationships:
+  - Center tone (`850Hz`): `mid(1kHz)` should be at least `5dB` below both `low(120Hz)` and `high(3.5kHz)`.
+  - Bass side (`350Hz`): `low(120Hz)` should be at least `4dB` above `high(3.5kHz)`.
+  - Treble side (`1600Hz`): `high(3.5kHz)` should be at least `4dB` above `low(120Hz)`.
+- This check is intentionally relationship-based, so minor coefficient drift does not create false negatives.

@@ -35,11 +35,17 @@ export const bigMuff: CircuitModel = {
       current = shaper
     }
 
-    const lpPath = new BiquadFilterNode(ctx, { type: 'lowpass', frequency: toneMid, Q: 0.5 })
-    const hpPath = new BiquadFilterNode(ctx, { type: 'highpass', frequency: 1800, Q: 0.5 })
+    const lpPath = new BiquadFilterNode(ctx, { type: 'lowpass', frequency: 820, Q: 0.55 })
+    const hpPath = new BiquadFilterNode(ctx, { type: 'highpass', frequency: 1050, Q: 0.55 })
     const lpMix = new GainNode(ctx, { gain: 0.5 })
     const hpMix = new GainNode(ctx, { gain: 0.5 })
     const toneSum = new GainNode(ctx, { gain: 0.72 })
+    const midNotch = new BiquadFilterNode(ctx, {
+      type: 'peaking',
+      frequency: 980,
+      Q: 0.9,
+      gain: -10,
+    })
     const post = new GainNode(ctx, { gain: 0.9 })
 
     current.connect(lpPath)
@@ -48,17 +54,25 @@ export const bigMuff: CircuitModel = {
     hpPath.connect(hpMix)
     lpMix.connect(toneSum)
     hpMix.connect(toneSum)
-    toneSum.connect(post)
+    toneSum.connect(midNotch)
+    midNotch.connect(post)
 
     const setTone = (value: number) => {
-      lpPath.frequency.value = value
       const clamped = Math.min(toneMax, Math.max(toneMin, value))
-      const mix =
-        clamped <= toneMid
-          ? ((clamped - toneMin) / (toneMid - toneMin)) * 0.5
-          : 0.5 + ((clamped - toneMid) / (toneMax - toneMid)) * 0.5
-      lpMix.gain.value = 0.9 - mix * 0.8
-      hpMix.gain.value = 0.1 + mix * 0.8
+      const toneNorm = (clamped - toneMin) / (toneMax - toneMin)
+      const fromCenter = Math.abs(toneNorm - 0.5) * 2
+
+      // Approximate Big Muff tone stack behavior:
+      // blend between LP/HP paths while preserving a center-position mid scoop.
+      lpPath.frequency.value = 620 + toneNorm * 420
+      hpPath.frequency.value = 700 + toneNorm * 900
+      lpMix.gain.value = 0.18 + (1 - toneNorm) * 0.82
+      hpMix.gain.value = 0.18 + toneNorm * 0.82
+
+      // Deepest notch at noon, shallower at extremes.
+      midNotch.frequency.value = 920 + (toneNorm - 0.5) * 260
+      midNotch.Q.value = 0.8 + (1 - fromCenter) * 0.35
+      midNotch.gain.value = -4 - (1 - fromCenter) * 8
     }
 
     setTone(toneMid)
@@ -79,6 +93,7 @@ export const bigMuff: CircuitModel = {
       getFilterNodes: () => [
         { node: lpPath, topology: 'parallel-lp', label: 'Tone LP', paramId: 'tone', gainNode: lpMix },
         { node: hpPath, topology: 'parallel-hp', label: 'Tone HP', paramId: 'tone', gainNode: hpMix },
+        { node: midNotch, topology: 'series', label: 'Mid Notch', paramId: 'tone' },
       ],
       destroy: () => {
         hpStages.forEach((node) => node.disconnect())
@@ -88,6 +103,7 @@ export const bigMuff: CircuitModel = {
         lpMix.disconnect()
         hpMix.disconnect()
         toneSum.disconnect()
+        midNotch.disconnect()
       },
     }
   },
