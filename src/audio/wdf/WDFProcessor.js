@@ -271,6 +271,9 @@ class TubeScreamerWDFGraph {
 
   constructor(config) {
     this.sampleRateHz = Math.max(config.sampleRate, 1)
+    this.startupMuteSamples = Math.max(128, Math.floor(this.sampleRateHz * 0.012))
+    this.startupFadeSamples = Math.max(128, Math.floor(this.sampleRateHz * 0.01))
+    this.startupCounter = 0
     this.driveResistor = new Resistor(mapDriveToResistance(config.drive))
     this.feedbackCapacitor = new Capacitor(FEEDBACK_CAPACITANCE, this.sampleRateHz)
     this.feedbackSeries = new SeriesAdaptor(this.driveResistor, this.feedbackCapacitor)
@@ -336,8 +339,10 @@ class TubeScreamerWDFGraph {
 
     if (this.bypassed.has('ts-input-resistor')) return sample
 
-    const sourceVoltage = (incident + reflected) * 0.5
-    const diodeVoltage = this.clippingDiodes.getVoltage()
+    const sourceVoltageRaw = (incident + reflected) * 0.5
+    const diodeVoltageRaw = this.clippingDiodes.getVoltage()
+    const sourceVoltage = Number.isFinite(sourceVoltageRaw) ? Math.max(-4, Math.min(4, sourceVoltageRaw)) : 0
+    const diodeVoltage = Number.isFinite(diodeVoltageRaw) ? Math.max(-4, Math.min(4, diodeVoltageRaw)) : 0
     const mixed = sourceVoltage * 0.65 + diodeVoltage * 0.35
     if (!Number.isFinite(mixed)) {
       return Math.tanh(sample * 3.2)
@@ -362,12 +367,29 @@ class TubeScreamerWDFGraph {
     const toned = this.processTone(clipped)
     const output = this.bypassed.has('ts-volume') ? toned : toned * this.level
 
-    if (!Number.isFinite(output)) {
+    let safeOutput = output
+
+    if (!Number.isFinite(safeOutput)) {
       const safe = Math.tanh(sample * (1 + this.drive * 6))
-      return this.bypassed.has('ts-volume') ? safe : safe * this.level
+      safeOutput = this.bypassed.has('ts-volume') ? safe : safe * this.level
     }
 
-    return output
+    safeOutput = Math.max(-1, Math.min(1, safeOutput))
+
+    if (this.startupCounter < this.startupMuteSamples) {
+      this.startupCounter += 1
+      return 0
+    }
+
+    const fadeIndex = this.startupCounter - this.startupMuteSamples
+    if (fadeIndex < this.startupFadeSamples) {
+      const fade = fadeIndex / this.startupFadeSamples
+      this.startupCounter += 1
+      return safeOutput * fade
+    }
+
+    this.startupCounter += 1
+    return safeOutput
   }
 }
 
@@ -408,7 +430,7 @@ class WDFProcessor extends AudioWorkletProcessor {
     }
 
     if (!this.graph) {
-      outputChannel.set(inputChannel)
+      outputChannel.fill(0)
       return true
     }
 
