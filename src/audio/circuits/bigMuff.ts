@@ -17,6 +17,9 @@ export const bigMuff: CircuitModel = {
     const input = new GainNode(ctx, { gain: 12 })
     const stages: WaveShaperNode[] = []
     const hpStages: BiquadFilterNode[] = []
+    const toneMin = 350
+    const toneMid = 850
+    const toneMax = 1600
 
     let current: AudioNode = input
     for (let i = 0; i < 4; i += 1) {
@@ -32,10 +35,33 @@ export const bigMuff: CircuitModel = {
       current = shaper
     }
 
-    const scoop = new BiquadFilterNode(ctx, { type: 'notch', frequency: 850, Q: 0.7 })
+    const lpPath = new BiquadFilterNode(ctx, { type: 'lowpass', frequency: toneMid, Q: 0.5 })
+    const hpPath = new BiquadFilterNode(ctx, { type: 'highpass', frequency: 1800, Q: 0.5 })
+    const lpMix = new GainNode(ctx, { gain: 0.5 })
+    const hpMix = new GainNode(ctx, { gain: 0.5 })
+    const toneSum = new GainNode(ctx, { gain: 0.72 })
     const post = new GainNode(ctx, { gain: 0.9 })
-    current.connect(scoop)
-    scoop.connect(post)
+
+    current.connect(lpPath)
+    current.connect(hpPath)
+    lpPath.connect(lpMix)
+    hpPath.connect(hpMix)
+    lpMix.connect(toneSum)
+    hpMix.connect(toneSum)
+    toneSum.connect(post)
+
+    const setTone = (value: number) => {
+      lpPath.frequency.value = value
+      const clamped = Math.min(toneMax, Math.max(toneMin, value))
+      const mix =
+        clamped <= toneMid
+          ? ((clamped - toneMin) / (toneMid - toneMin)) * 0.5
+          : 0.5 + ((clamped - toneMid) / (toneMax - toneMid)) * 0.5
+      lpMix.gain.value = 0.9 - mix * 0.8
+      hpMix.gain.value = 0.1 + mix * 0.8
+    }
+
+    setTone(toneMid)
 
     return {
       input,
@@ -47,12 +73,21 @@ export const bigMuff: CircuitModel = {
             stage.curve = createCurve((x) => Math.tanh(x * value) / Math.tanh(value))
           })
         }
-        if (paramId === 'tone') scoop.frequency.value = value
+        if (paramId === 'tone') setTone(value)
         if (paramId === 'volume') post.gain.value = value
       },
+      getFilterNodes: () => [
+        { node: lpPath, topology: 'parallel-lp', label: 'Tone LP', paramId: 'tone', gainNode: lpMix },
+        { node: hpPath, topology: 'parallel-hp', label: 'Tone HP', paramId: 'tone', gainNode: hpMix },
+      ],
       destroy: () => {
         hpStages.forEach((node) => node.disconnect())
         stages.forEach((node) => node.disconnect())
+        lpPath.disconnect()
+        hpPath.disconnect()
+        lpMix.disconnect()
+        hpMix.disconnect()
+        toneSum.disconnect()
       },
     }
   },

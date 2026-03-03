@@ -15,6 +15,7 @@ export const tubeScreamer: CircuitModel = {
   ],
   create: (ctx) => {
     const preGain = new GainNode(ctx, { gain: 8 })
+    const midHighpass = new BiquadFilterNode(ctx, { type: 'highpass', frequency: 720, Q: 0.5 })
     const shaper = new WaveShaperNode(ctx, {
       oversample: '4x',
       curve: createCurve((x) => Math.tanh(x * 8) / Math.tanh(8)),
@@ -22,7 +23,8 @@ export const tubeScreamer: CircuitModel = {
     const tone = new BiquadFilterNode(ctx, { type: 'lowpass', frequency: 1800, Q: 0.65 })
     const level = new GainNode(ctx, { gain: 0.8 })
 
-    preGain.connect(shaper)
+    preGain.connect(midHighpass)
+    midHighpass.connect(shaper)
     shaper.connect(tone)
     tone.connect(level)
 
@@ -37,6 +39,10 @@ export const tubeScreamer: CircuitModel = {
         if (paramId === 'tone') tone.frequency.value = value
         if (paramId === 'level') level.gain.value = value
       },
+      getFilterNodes: () => [
+        { node: midHighpass, topology: 'series', label: 'Feedback HP' },
+        { node: tone, topology: 'series', label: 'Tone LP', paramId: 'tone' },
+      ],
     }
   },
 }

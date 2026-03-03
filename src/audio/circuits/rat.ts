@@ -45,6 +45,7 @@ export const rat: CircuitModel = {
         if (paramId === 'filter') filter.frequency.value = value
         if (paramId === 'volume') out.gain.value = value
       },
+      getFilterNodes: () => [{ node: filter, topology: 'series', label: 'Filter', paramId: 'filter' }],
     }
   },
 }

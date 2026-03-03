@@ -53,6 +53,7 @@ export const klonCentaur: CircuitModel = {
         if (paramId === 'treble') treble.frequency.value = value
         if (paramId === 'output') output.gain.value = value
       },
+      getFilterNodes: () => [{ node: treble, topology: 'series', label: 'Treble', paramId: 'treble' }],
     }
   },
 }

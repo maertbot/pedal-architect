@@ -1,5 +1,5 @@
 import { CIRCUIT_MAP, CIRCUITS } from '../data/circuits'
-import type { CircuitRuntime } from './types'
+import type { CircuitRuntime, FilterNodeDescriptor, PhaserConfig } from './types'
 
 export type SamplePreset = 'strum' | 'single-note' | 'arpeggio' | 'power-chord'
 
@@ -125,6 +125,14 @@ export class AudioEngine {
 
   getAnalyser(): AnalyserNode | null {
     return this.analyser
+  }
+
+  getFilterNodes(): FilterNodeDescriptor[] {
+    return this.circuitRuntime?.getFilterNodes?.() ?? []
+  }
+
+  getPhaserConfig(): PhaserConfig | undefined {
+    return this.circuitRuntime?.getPhaserConfig?.()
   }
 
   getCurrentCircuitId(): string {

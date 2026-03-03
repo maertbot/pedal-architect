@@ -52,6 +52,7 @@ export const fuzzFace: CircuitModel = {
         }
         if (paramId === 'volume') out.gain.value = value
       },
+      getFilterNodes: () => [],
     }
   },
 }

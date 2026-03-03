@@ -33,6 +33,7 @@ export const phaseNinety: CircuitModel = {
     const lfo = new OscillatorNode(ctx, { type: 'sine', frequency: 1.3 })
     const lfoGain = new GainNode(ctx, { gain: 260 })
     const base = new ConstantSourceNode(ctx, { offset: 520 })
+    let currentRate = 1.3
 
     lfo.connect(lfoGain)
     allpass.forEach((stage, index) => {
@@ -50,8 +51,24 @@ export const phaseNinety: CircuitModel = {
       input,
       output,
       setParameter: (paramId, value) => {
-        if (paramId === 'speed') lfo.frequency.value = value
+        if (paramId === 'speed') {
+          currentRate = value
+          lfo.frequency.value = value
+        }
       },
+      getFilterNodes: () =>
+        allpass.map((node, index) => ({
+          node,
+          topology: 'series' as const,
+          label: `Allpass ${index + 1}`,
+          paramId: 'speed',
+        })),
+      getPhaserConfig: () => ({
+        dryGain: dry.gain.value,
+        wetGain: wet.gain.value,
+        allpassNodes: allpass,
+        lfoRateHz: currentRate,
+      }),
       destroy: () => {
         lfo.stop()
         base.stop()

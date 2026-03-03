@@ -12,11 +12,28 @@ export interface ParameterDefinition {
   componentType: 'pot' | 'toggle' | 'diode-select'
 }
 
+export interface FilterNodeDescriptor {
+  node: BiquadFilterNode
+  topology: 'series' | 'parallel-lp' | 'parallel-hp'
+  label: string
+  paramId?: string
+  gainNode?: GainNode
+}
+
+export interface PhaserConfig {
+  dryGain: number
+  wetGain: number
+  allpassNodes: BiquadFilterNode[]
+  lfoRateHz: number
+}
+
 export interface CircuitRuntime {
   input: AudioNode
   output: AudioNode
   setParameter: (paramId: string, value: number) => void
   destroy?: () => void
+  getFilterNodes?: () => FilterNodeDescriptor[]
+  getPhaserConfig?: () => PhaserConfig
 }
 
 export interface CircuitModel {

@@ -187,6 +187,10 @@ select,
   padding: 10px;
 }
 
+.freq-response-row {
+  padding: 10px;
+}
+
 .scope-toolbar {
   display: flex;
   gap: 6px;
@@ -212,6 +216,22 @@ select,
   display: block;
   width: 100%;
   height: 220px;
+  background: #020a04;
+}
+
+.freq-response-shell {
+  border: 1px solid #1f4d2c;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 35px rgba(32, 255, 96, 0.06),
+    0 0 14px rgba(32, 255, 96, 0.08);
+}
+
+.freq-response-canvas {
+  display: block;
+  width: 100%;
+  height: 200px;
   background: #020a04;
 }
 
@@ -506,5 +526,13 @@ select,
 
   .bottombar {
     font-size: 10px;
+  }
+
+  .scope-canvas {
+    height: 160px;
+  }
+
+  .freq-response-canvas {
+    height: 140px;
   }
 }
