@@ -42,7 +42,7 @@ export class AudioEngine {
       smoothingTimeConstant: 0.86,
     })
 
-    const processorUrl = new URL('./wdf/WDFProcessor.ts', import.meta.url).href
+    const processorUrl = new URL('./wdf/WDFProcessor.js', import.meta.url).href
     await this.context.audioWorklet.addModule(processorUrl)
 
     this.setCircuit(this.currentCircuitId)

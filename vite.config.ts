@@ -8,17 +8,4 @@ export default defineConfig({
   worker: {
     format: 'es',
   },
-  build: {
-    rollupOptions: {
-      output: {
-        assetFileNames: (assetInfo) => {
-          const names = [assetInfo.name, ...(assetInfo.names ?? [])].filter((name): name is string => Boolean(name))
-          if (names.some((name) => name.endsWith('WDFProcessor.ts'))) {
-            return 'assets/[name]-[hash].js'
-          }
-          return 'assets/[name]-[hash][extname]'
-        },
-      },
-    },
-  },
 })

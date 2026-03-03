@@ -17,7 +17,7 @@ export class WDFWorkletNode extends AudioWorkletNode {
   }
 
   static async create(context: AudioContext, config: TubeScreamerWDFConfig): Promise<WDFWorkletNode> {
-    const processorUrl = new URL('./WDFProcessor.ts', import.meta.url).href
+    const processorUrl = new URL('./WDFProcessor.js', import.meta.url).href
     await context.audioWorklet.addModule(processorUrl)
     return new WDFWorkletNode(context, config)
   }
