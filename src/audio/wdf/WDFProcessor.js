@@ -221,6 +221,9 @@ class DiodePair {
       x = next
     }
 
+    if (!Number.isFinite(x)) {
+      x = 0
+    }
     this.reflected = x
     return this.reflected
   }
@@ -235,9 +238,8 @@ const INPUT_RESISTANCE = 4_700
 const FEEDBACK_CAPACITANCE = 0.047e-6
 const DRIVE_MIN_RESISTANCE = 51_000
 const DRIVE_SPAN_RESISTANCE = 500_000
-const TONE_BASE_RESISTANCE = 220
-const TONE_POT_SPAN = 20_000
-const TONE_CAPACITANCE = 0.22e-6
+const TONE_MIN_CUTOFF_HZ = 720
+const TONE_MAX_CUTOFF_HZ = 4_500
 
 const clamp01 = (value) => {
   if (value < 0) return 0
@@ -250,7 +252,10 @@ const mapDriveToResistance = (driveNormalized) => {
   return DRIVE_MIN_RESISTANCE + (1 - normalized) * DRIVE_SPAN_RESISTANCE
 }
 
-const mapToneToResistance = (toneNormalized) => TONE_BASE_RESISTANCE + clamp01(toneNormalized) * TONE_POT_SPAN
+const mapToneToCutoffHz = (toneNormalized) => {
+  const t = clamp01(toneNormalized)
+  return TONE_MIN_CUTOFF_HZ * (TONE_MAX_CUTOFF_HZ / TONE_MIN_CUTOFF_HZ) ** t
+}
 
 class TubeScreamerWDFGraph {
   source = new IdealVoltageSource()
@@ -330,7 +335,14 @@ class TubeScreamerWDFGraph {
     this.source.accept(reflected)
 
     if (this.bypassed.has('ts-input-resistor')) return sample
-    return this.clippingDiodes.getVoltage()
+
+    const sourceVoltage = (incident + reflected) * 0.5
+    const diodeVoltage = this.clippingDiodes.getVoltage()
+    const mixed = sourceVoltage * 0.65 + diodeVoltage * 0.35
+    if (!Number.isFinite(mixed)) {
+      return Math.tanh(sample * 3.2)
+    }
+    return mixed
   }
 
   processTone(sample) {
@@ -338,8 +350,7 @@ class TubeScreamerWDFGraph {
       return sample
     }
 
-    const resistance = mapToneToResistance(this.tone)
-    const cutoffHz = 1 / (2 * Math.PI * resistance * TONE_CAPACITANCE)
+    const cutoffHz = mapToneToCutoffHz(this.tone)
     const alpha = Math.exp((-2 * Math.PI * cutoffHz) / this.sampleRateHz)
     this.toneState = (1 - alpha) * sample + alpha * this.toneState
     return this.toneState
@@ -349,8 +360,14 @@ class TubeScreamerWDFGraph {
     const coupled = this.processInputCoupling(sample)
     const clipped = this.processClipping(coupled)
     const toned = this.processTone(clipped)
-    if (this.bypassed.has('ts-volume')) return toned
-    return toned * this.level
+    const output = this.bypassed.has('ts-volume') ? toned : toned * this.level
+
+    if (!Number.isFinite(output)) {
+      const safe = Math.tanh(sample * (1 + this.drive * 6))
+      return this.bypassed.has('ts-volume') ? safe : safe * this.level
+    }
+
+    return output
   }
 }
 
