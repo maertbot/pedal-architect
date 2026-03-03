@@ -37,6 +37,7 @@ export interface CircuitRuntime {
 }
 
 export interface CircuitModel {
+  engine?: 'legacy' | 'wdf'
   id: string
   name: string
   description: string

@@ -66,3 +66,36 @@
 ### Follow-on Maintenance Guidance
 - If circuits exceed 9 and keyboard direct access remains a requirement, add a paging or command palette path; current shortcut handling intentionally covers `1-9` only.
 - For future circuit additions, keep control names aligned to manufacturer labels to preserve user trust and searchability.
+
+## 2026-03-03 — Phase 1 WDF Core Engine + AudioWorklet + TS808
+
+### What Worked
+- Keeping WDF primitives (`elements`, `adaptors`, `nonlinear`) as standalone pure TypeScript modules made them directly testable in Node and reusable inside the AudioWorklet bundle.
+- Preloading `WDFProcessor.ts` in `AudioEngine.init()` allowed synchronous `new AudioWorkletNode(...)` from circuit `create(...)`, preserving the existing `CircuitModel` synchronous runtime contract.
+- Vite successfully emitted the worklet as a separate chunk from `new URL('./wdf/WDFProcessor.ts', import.meta.url).href`.
+- Node-native tests were effective for validating WDF math behaviors (port resistances, capacitor delay behavior, diode Newton convergence).
+
+### What Broke
+- TypeScript app build initially failed in the worklet file because `AudioWorkletProcessor`/`registerProcessor` were not available in current compile libs. Fix: add local ambient declarations in `WDFProcessor.ts`.
+- NodeNext test compilation failed on extensionless relative imports in WDF modules. Fix: convert new WDF internal imports to explicit `.js` suffixes.
+- Node tests failed importing `WDFWorkletNode` because `AudioWorkletNode` does not exist in Node globals. Fix: use dynamic imports and temporary global `AudioWorkletNode` stubs in tests.
+- ESLint errored when `.test-dist` was missing but still scanned. Fix: add `.test-dist` to `globalIgnores`.
+
+### What Was Surprising
+- Worklet chunk output used a `.ts` filename in `dist/assets/` while still loading and bundling correctly through Vite.
+- The diode-pair Newton solver converged quickly for typical audio-level incidents with warm-starting from previous sample reflection.
+
+### Gotchas
+- With `moduleResolution: NodeNext` in test compilation, all relative ESM imports in source consumed by tests must use explicit file extensions.
+- Any module that statically defines `class X extends AudioWorkletNode` cannot be imported in Node test runtime without first stubbing `globalThis.AudioWorkletNode`.
+- Worklet modules are isolated from main-thread globals/import assumptions; keep processor dependencies self-contained and side-effect-safe.
+
+### How To Extend
+- Add additional WDF circuits by reusing `WDFWorkletNode` + protocol messages and creating per-circuit graph classes inside the processor (or by routing on `setup.circuit`).
+- Expand bypass support by mapping UI/component IDs to worklet `bypass` messages and toggling `WDFElement.bypass` flags at sample time.
+- For higher fidelity TS808 modeling, replace the simplified tone one-pole stage with a full WDF tone-stack subtree and include op-amp finite gain/bandwidth modeling.
+- Add regression tests that sweep `drive/tone/level` and assert bounded output + monotonic mapping trends.
+
+### Dependency Verification (Phase 1)
+- Ran `curl -sI` against every npm package URL (`https://registry.npmjs.org/<name>`) from `dependencies` and `devDependencies` in `package.json`.
+- Result: all checked package URLs returned HTTP `200`.

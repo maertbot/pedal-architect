@@ -10,10 +10,12 @@ import { mxrDistortionPlus } from '../audio/circuits/mxrDistortionPlus'
 import { phaseNinety } from '../audio/circuits/phaseNinety'
 import { rat } from '../audio/circuits/rat'
 import { tubeScreamer } from '../audio/circuits/tubeScreamer'
+import { tubeScreamerWDF } from '../audio/wdf/circuits/tubeScreamerWDF'
 import type { CircuitModel } from '../audio/types'
 
 export const CIRCUITS: CircuitModel[] = [
   tubeScreamer,
+  tubeScreamerWDF,
   bigMuff,
   klonCentaur,
   rat,
