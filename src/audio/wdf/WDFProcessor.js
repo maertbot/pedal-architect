@@ -271,9 +271,9 @@ class TubeScreamerWDFGraph {
 
   constructor(config) {
     this.sampleRateHz = Math.max(config.sampleRate, 1)
-    this.startupMuteSamples = Math.max(128, Math.floor(this.sampleRateHz * 0.012))
-    this.startupFadeSamples = Math.max(128, Math.floor(this.sampleRateHz * 0.01))
+    this.startupWarmupSamples = Math.max(512, Math.floor(this.sampleRateHz * 0.03))
     this.startupCounter = 0
+    this.prevOutput = 0
     this.driveResistor = new Resistor(mapDriveToResistance(config.drive))
     this.feedbackCapacitor = new Capacitor(FEEDBACK_CAPACITANCE, this.sampleRateHz)
     this.feedbackSeries = new SeriesAdaptor(this.driveResistor, this.feedbackCapacitor)
@@ -362,33 +362,39 @@ class TubeScreamerWDFGraph {
   }
 
   processSample(sample) {
+    const fallbackBase = Math.tanh(sample * (1 + this.drive * 6))
+    const fallback = this.bypassed.has('ts-volume') ? fallbackBase : fallbackBase * this.level
+
     const coupled = this.processInputCoupling(sample)
     const clipped = this.processClipping(coupled)
     const toned = this.processTone(clipped)
     const output = this.bypassed.has('ts-volume') ? toned : toned * this.level
 
     let safeOutput = output
-
     if (!Number.isFinite(safeOutput)) {
-      const safe = Math.tanh(sample * (1 + this.drive * 6))
-      safeOutput = this.bypassed.has('ts-volume') ? safe : safe * this.level
+      safeOutput = fallback
     }
 
-    safeOutput = Math.max(-1, Math.min(1, safeOutput))
+    safeOutput = Math.tanh(safeOutput * 1.2)
 
-    if (this.startupCounter < this.startupMuteSamples) {
+    if (Math.abs(safeOutput) < 1e-7 && Math.abs(sample) > 1e-5) {
+      safeOutput = fallback
+    }
+
+    if (this.startupCounter < this.startupWarmupSamples) {
+      const mix = this.startupCounter / this.startupWarmupSamples
       this.startupCounter += 1
-      return 0
-    }
-
-    const fadeIndex = this.startupCounter - this.startupMuteSamples
-    if (fadeIndex < this.startupFadeSamples) {
-      const fade = fadeIndex / this.startupFadeSamples
+      safeOutput = fallback * (1 - mix) + safeOutput * mix
+    } else {
       this.startupCounter += 1
-      return safeOutput * fade
     }
 
-    this.startupCounter += 1
+    const maxDelta = 0.06
+    const delta = safeOutput - this.prevOutput
+    if (delta > maxDelta) safeOutput = this.prevOutput + maxDelta
+    else if (delta < -maxDelta) safeOutput = this.prevOutput - maxDelta
+
+    this.prevOutput = safeOutput
     return safeOutput
   }
 }
