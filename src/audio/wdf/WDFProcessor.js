@@ -1,6 +1,234 @@
-import { ParallelAdaptor, SeriesAdaptor } from './adaptors.js'
-import { Capacitor, IdealVoltageSource, Resistor } from './elements.js'
-import { DiodePair } from './nonlinear.js'
+const MIN_RESISTANCE = 1e-9
+
+class Resistor {
+  constructor(resistanceOhms) {
+    this.portResistance = Math.max(resistanceOhms, MIN_RESISTANCE)
+    this.incident = 0
+    this.reflected = 0
+    this.bypass = false
+  }
+
+  setParam(value) {
+    this.portResistance = Math.max(value, MIN_RESISTANCE)
+  }
+
+  accept(wave) {
+    this.incident = wave
+  }
+
+  reflect() {
+    this.reflected = 0
+    return this.reflected
+  }
+}
+
+class Capacitor {
+  constructor(capacitanceFarads, sampleRateHz) {
+    this.portResistance = 1 / (2 * capacitanceFarads * sampleRateHz)
+    this.incident = 0
+    this.reflected = 0
+    this.bypass = false
+    this.previousIncident = 0
+  }
+
+  accept(wave) {
+    this.incident = wave
+  }
+
+  reflect() {
+    this.reflected = this.previousIncident
+    this.previousIncident = this.incident
+    return this.reflected
+  }
+}
+
+class IdealVoltageSource {
+  constructor() {
+    this.portResistance = MIN_RESISTANCE
+    this.incident = 0
+    this.reflected = 0
+    this.bypass = false
+    this.voltage = 0
+  }
+
+  setParam(value) {
+    this.voltage = value
+  }
+
+  accept(wave) {
+    this.incident = wave
+  }
+
+  reflect() {
+    this.reflected = 2 * this.voltage - this.incident
+    return this.reflected
+  }
+}
+
+class SeriesAdaptor {
+  constructor(left, right) {
+    this.left = left
+    this.right = right
+    this.incident = 0
+    this.reflected = 0
+    this.bypass = false
+    this.portResistance = Math.max(this.left.portResistance + this.right.portResistance, MIN_RESISTANCE)
+  }
+
+  refreshPortResistance() {
+    this.portResistance = Math.max(this.left.portResistance + this.right.portResistance, MIN_RESISTANCE)
+  }
+
+  accept(wave) {
+    this.incident = wave
+  }
+
+  reflect() {
+    this.refreshPortResistance()
+
+    const r1 = Math.max(this.left.portResistance, MIN_RESISTANCE)
+    const r2 = Math.max(this.right.portResistance, MIN_RESISTANCE)
+    const total = r1 + r2
+
+    const weighted = (r1 * this.right.reflected + r2 * this.left.reflected) / total
+
+    const leftIncident = this.incident + this.right.reflected - weighted
+    this.left.accept(leftIncident)
+    const leftReflected = this.left.reflect()
+
+    const rightIncident = this.incident + leftReflected - weighted
+    this.right.accept(rightIncident)
+    const rightReflected = this.right.reflect()
+
+    this.reflected = leftReflected + rightReflected - this.incident
+    return this.reflected
+  }
+}
+
+class ParallelAdaptor {
+  constructor(left, right) {
+    this.left = left
+    this.right = right
+    this.incident = 0
+    this.reflected = 0
+    this.bypass = false
+    this.portResistance = this.computePortResistance()
+  }
+
+  computePortResistance() {
+    const r1 = Math.max(this.left.portResistance, MIN_RESISTANCE)
+    const r2 = Math.max(this.right.portResistance, MIN_RESISTANCE)
+    return Math.max((r1 * r2) / (r1 + r2), MIN_RESISTANCE)
+  }
+
+  refreshPortResistance() {
+    this.portResistance = this.computePortResistance()
+  }
+
+  accept(wave) {
+    this.incident = wave
+  }
+
+  reflect() {
+    this.refreshPortResistance()
+
+    const r1 = Math.max(this.left.portResistance, MIN_RESISTANCE)
+    const r2 = Math.max(this.right.portResistance, MIN_RESISTANCE)
+    const total = r1 + r2
+
+    const leftIncident = this.incident + (r1 / total) * (this.right.reflected - this.left.reflected)
+    this.left.accept(leftIncident)
+    const leftReflected = this.left.reflect()
+
+    const rightIncident = this.incident + (r2 / total) * (leftReflected - this.right.reflected)
+    this.right.accept(rightIncident)
+    const rightReflected = this.right.reflect()
+
+    this.reflected = (r2 * leftReflected + r1 * rightReflected) / total
+    return this.reflected
+  }
+}
+
+const DEFAULT_IS = 2.52e-9
+const DEFAULT_N = 1.752
+const DEFAULT_VT = 25.85e-3
+const MAX_NEWTON_ITERATIONS = 50
+const NEWTON_TOLERANCE = 1e-6
+const MAX_EXP_ARGUMENT = 40
+
+class DiodePair {
+  constructor(portResistance, Is = DEFAULT_IS, n = DEFAULT_N, Vt = DEFAULT_VT) {
+    this.portResistance = Math.max(portResistance, MIN_RESISTANCE)
+    this.incident = 0
+    this.reflected = 0
+    this.bypass = false
+    this.Is = Is
+    this.n = n
+    this.Vt = Vt
+  }
+
+  setPortResistance(value) {
+    this.portResistance = Math.max(value, MIN_RESISTANCE)
+  }
+
+  accept(wave) {
+    this.incident = wave
+  }
+
+  clampExpArg(value) {
+    if (value > MAX_EXP_ARGUMENT) return MAX_EXP_ARGUMENT
+    if (value < -MAX_EXP_ARGUMENT) return -MAX_EXP_ARGUMENT
+    return value
+  }
+
+  equation(incident, reflected) {
+    const voltage = (incident + reflected) * 0.5
+    const arg = this.clampExpArg(voltage / (this.n * this.Vt))
+    const sinhTerm = Math.exp(arg) - Math.exp(-arg)
+    return (incident - reflected) / (2 * this.portResistance) - this.Is * sinhTerm
+  }
+
+  derivative(incident, reflected) {
+    const voltage = (incident + reflected) * 0.5
+    const arg = this.clampExpArg(voltage / (this.n * this.Vt))
+    const coshTerm = Math.exp(arg) + Math.exp(-arg)
+    return -1 / (2 * this.portResistance) - this.Is * (0.5 / (this.n * this.Vt)) * coshTerm
+  }
+
+  reflect() {
+    if (this.bypass) {
+      this.reflected = this.incident
+      return this.reflected
+    }
+
+    let x = Number.isFinite(this.reflected) ? this.reflected : 0
+
+    for (let iteration = 0; iteration < MAX_NEWTON_ITERATIONS; iteration += 1) {
+      const f = this.equation(this.incident, x)
+      const df = this.derivative(this.incident, x)
+
+      if (!Number.isFinite(df) || Math.abs(df) < Number.EPSILON) {
+        break
+      }
+
+      const next = x - f / df
+      if (!Number.isFinite(next)) break
+      if (Math.abs(next - x) <= NEWTON_TOLERANCE) {
+        x = next
+        break
+      }
+
+      x = next
+    }
+
+    this.reflected = x
+    return this.reflected
+  }
+
+  getVoltage() {
+    return (this.incident + this.reflected) * 0.5
+  }
+}
 
 const INPUT_CAPACITANCE = 0.047e-6
 const INPUT_RESISTANCE = 4_700
