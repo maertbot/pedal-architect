@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { audioEngine, type SamplePreset } from './audio/AudioEngine'
+import { syncCircuitSelection } from './audio/syncCircuitSelection'
 import { CircuitLab } from './components/circuit-lab/CircuitLab'
 import { EnclosureDesigner } from './components/enclosure/EnclosureDesigner'
 import { CIRCUITS, CIRCUIT_MAP } from './data/circuits'
@@ -30,16 +31,16 @@ function App() {
   const isTablet = windowWidth < 1024
   const isMobile = windowWidth < 768
 
-  const currentCircuitParams = parameters[currentCircuit] ?? {}
-
-  const initEngine = async () => {
+  const initEngine = useCallback(async () => {
     await audioEngine.init()
-    audioEngine.setCircuit(currentCircuit)
-    Object.entries(currentCircuitParams).forEach(([paramId, value]) => {
-      audioEngine.setParameter(currentCircuit, paramId, value)
-    })
+    syncCircuitSelection(audioEngine, currentCircuit, parameters)
     setEngineArmed(true)
-  }
+  }, [currentCircuit, parameters])
+
+  const handleCircuitSelect = useCallback((circuitId: string) => {
+    setCircuit(circuitId)
+    syncCircuitSelection(audioEngine, circuitId, parameters)
+  }, [parameters, setCircuit])
 
   const togglePlayback = async () => {
     if (!engineArmed) {
@@ -63,11 +64,8 @@ function App() {
 
   useEffect(() => {
     if (!engineArmed) return
-    audioEngine.setCircuit(currentCircuit)
-    Object.entries(currentCircuitParams).forEach(([paramId, value]) => {
-      audioEngine.setParameter(currentCircuit, paramId, value)
-    })
-  }, [currentCircuit, currentCircuitParams, engineArmed])
+    syncCircuitSelection(audioEngine, currentCircuit, parameters)
+  }, [currentCircuit, engineArmed, parameters])
 
   useEffect(() => {
     audioEngine.setSamplePreset(selectedSample)
@@ -92,9 +90,9 @@ function App() {
         }
       }
 
-      if (event.key >= '1' && event.key <= '6') {
+      if (event.key >= '1' && event.key <= '9') {
         const index = Number(event.key) - 1
-        if (CIRCUITS[index]) setCircuit(CIRCUITS[index].id)
+        if (CIRCUITS[index]) handleCircuitSelect(CIRCUITS[index].id)
       }
 
       if (event.key.toLowerCase() === 'r') {
@@ -131,7 +129,8 @@ function App() {
     selectedComponentId,
     setActiveTab,
     setAudioPlaying,
-    setCircuit,
+    initEngine,
+    handleCircuitSelect,
   ])
 
   const sampleOptions = useMemo(
@@ -165,7 +164,7 @@ function App() {
         <div className="top-controls">
           <label>
             CIRCUIT
-            <select value={currentCircuit} onChange={(event) => setCircuit(event.target.value)}>
+            <select value={currentCircuit} onChange={(event) => handleCircuitSelect(event.target.value)}>
               {CIRCUITS.map((circuit, index) => (
                 <option key={circuit.id} value={circuit.id}>{`${index + 1}. ${circuit.name}`}</option>
               ))}
@@ -204,7 +203,7 @@ function App() {
         {(!isTablet || activeTab === 'circuit') && (
           <section className="workspace-pane">
             <h2>{CIRCUIT_MAP[currentCircuit].name}</h2>
-            <CircuitLab audioEngine={audioEngine} />
+            <CircuitLab audioEngine={audioEngine} onSelectCircuit={handleCircuitSelect} />
           </section>
         )}
 
@@ -218,7 +217,7 @@ function App() {
 
       <footer className="bottombar panel">
         <span>[SPACE] PLAY/STOP</span>
-        <span>[1-6] CIRCUITS</span>
+        <span>[1-9] CIRCUITS</span>
         <span>[R] RESET</span>
         <span>[CMD/CTRL+E] EXPORT PDF</span>
       </footer>

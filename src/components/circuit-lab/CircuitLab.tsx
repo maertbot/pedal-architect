@@ -10,16 +10,16 @@ import { FrequencyResponse } from '../shared/FrequencyResponse'
 
 interface CircuitLabProps {
   audioEngine: AudioEngine
+  onSelectCircuit: (circuitId: string) => void
 }
 
-export function CircuitLab({ audioEngine }: CircuitLabProps) {
+export function CircuitLab({ audioEngine, onSelectCircuit }: CircuitLabProps) {
   const [scopeMode, setScopeMode] = useState<'waveform' | 'fft'>('waveform')
   const currentCircuit = useStore((state) => state.currentCircuit)
   const parameters = useStore((state) => state.parameters[currentCircuit])
   const highlightedBlock = useStore((state) => state.highlightedBlock)
   const audioPlaying = useStore((state) => state.audioPlaying)
   const setParameter = useStore((state) => state.setParameter)
-  const setCircuit = useStore((state) => state.setCircuit)
 
   const circuit = useMemo(() => CIRCUIT_MAP[currentCircuit], [currentCircuit])
   const filterNodes = audioEngine.getFilterNodes()
@@ -60,7 +60,7 @@ export function CircuitLab({ audioEngine }: CircuitLabProps) {
 
       <ParameterControls circuit={circuit} values={parameters ?? {}} onChange={handleParameterChange} />
       <CircuitDiagram highlightedBlock={highlightedBlock} />
-      <CircuitSelector currentCircuit={currentCircuit} onSelect={setCircuit} />
+      <CircuitSelector currentCircuit={currentCircuit} onSelect={onSelectCircuit} />
     </div>
   )
 }

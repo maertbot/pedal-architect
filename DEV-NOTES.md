@@ -49,3 +49,20 @@
   - Bass side (`350Hz`): `low(120Hz)` should be at least `4dB` above `high(3.5kHz)`.
   - Treble side (`1600Hz`): `high(3.5kHz)` should be at least `4dB` above `low(120Hz)`.
 - This check is intentionally relationship-based, so minor coefficient drift does not create false negatives.
+
+## 2026-03-03 — Circuit Selection Sync + Circuit Expansion
+
+### Maintenance Notes
+- Introduced `src/audio/syncCircuitSelection.ts` as the single circuit-selection sync point (`setCircuit` + parameter replay). Any new UI entry point that changes circuits should call this helper.
+- `App.tsx` now routes dropdown, keyboard shortcuts, and circuit-card selection through the same handler to prevent UI/audio graph drift.
+- Added six new circuit modules and registered them in `src/data/circuits.ts`; defaults are auto-derived through existing `getCircuitDefaults` logic.
+- Added a no-new-dependency test path via `tsconfig.test.json` and `node:test` to keep CI lightweight.
+
+### Lessons Learned
+- The stale frequency-response bug was a state-sync ordering issue, not a DSP issue: graph updates inside an effect did not automatically trigger a second render.
+- Centralized selection orchestration is safer than scattered `setCircuit(...)` calls, especially when rendering depends on imperative engine state.
+- NodeNext test compilation requires explicit `.js` import suffixes in TypeScript test files.
+
+### Follow-on Maintenance Guidance
+- If circuits exceed 9 and keyboard direct access remains a requirement, add a paging or command palette path; current shortcut handling intentionally covers `1-9` only.
+- For future circuit additions, keep control names aligned to manufacturer labels to preserve user trust and searchability.

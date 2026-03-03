@@ -76,8 +76,12 @@ export function FrequencyResponse({
   const hoverXRef = useRef<number | null>(null)
   const touchClearTimerRef = useRef<number | null>(null)
   const spectrumOpacityRef = useRef(0)
-  const circuitTransitionStartRef = useRef<number>(performance.now())
+  const circuitTransitionStartRef = useRef<number>(0)
   const lastCircuitRef = useRef(circuitId)
+
+  useEffect(() => {
+    circuitTransitionStartRef.current = performance.now()
+  }, [])
 
   useEffect(() => {
     if (lastCircuitRef.current !== circuitId) {
