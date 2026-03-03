@@ -26,15 +26,23 @@ function App() {
   const removePlacedComponent = useStore((state) => state.removePlacedComponent)
 
   const [engineArmed, setEngineArmed] = useState(false)
+  const [initError, setInitError] = useState<string | null>(null)
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
 
   const isTablet = windowWidth < 1024
   const isMobile = windowWidth < 768
 
   const initEngine = useCallback(async () => {
-    await audioEngine.init()
-    syncCircuitSelection(audioEngine, currentCircuit, parameters)
-    setEngineArmed(true)
+    try {
+      await audioEngine.init()
+      syncCircuitSelection(audioEngine, currentCircuit, parameters)
+      setEngineArmed(true)
+      setInitError(null)
+    } catch (error) {
+      console.error('Audio engine init failed', error)
+      setInitError('AUDIO INIT FAILED — CLICK TO RETRY')
+      setEngineArmed(false)
+    }
   }, [currentCircuit, parameters])
 
   const handleCircuitSelect = useCallback((circuitId: string) => {
@@ -153,7 +161,7 @@ function App() {
 
   return (
     <div className="app-shell" onMouseDown={handleFirstInteraction} onKeyDown={handleFirstInteraction} role="application" tabIndex={0}>
-      {!engineArmed ? <div className="audio-overlay">CLICK ANYWHERE TO ARM AUDIO ENGINE</div> : null}
+      {!engineArmed ? <div className="audio-overlay">{initError ?? 'CLICK ANYWHERE TO ARM AUDIO ENGINE'}</div> : null}
 
       <header className="topbar panel">
         <div className="brand">
