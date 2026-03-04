@@ -271,7 +271,6 @@ class TubeScreamerWDFGraph {
   hpPrevInput = 0
   hpPrevOutput = 0
   toneState = 0
-  toneState2 = 0
 
   constructor(config) {
     this.sampleRateHz = Math.max(config.sampleRate, 1)
@@ -377,14 +376,20 @@ class TubeScreamerWDFGraph {
       return sample
     }
 
+    // TS-style post-clipping tone voicing: low/high spectral tilt around a moving pole.
     const cutoffHz = mapToneToCutoffHz(this.tone)
     const alpha = Math.exp((-2 * Math.PI * cutoffHz) / this.sampleRateHz)
 
-    // Two cascaded one-pole lowpass stages for a more audible tone sweep.
     this.toneState = (1 - alpha) * sample + alpha * this.toneState
-    this.toneState2 = (1 - alpha) * this.toneState + alpha * this.toneState2
+    const lowBand = this.toneState
+    const highBand = sample - lowBand
 
-    return this.toneState2
+    const t = this.tone
+    const lowGain = 1.15 - 0.65 * t
+    const highGain = 0.3 + 1.45 * t
+
+    const shaped = lowBand * lowGain + highBand * highGain
+    return Math.tanh(shaped * 0.95)
   }
 
   processSample(sample) {
