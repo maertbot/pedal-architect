@@ -228,13 +228,13 @@ export const tubeScreamerWDF: CircuitModel = {
       const toneResBase = TONE_RESISTANCE_BASE * getMultiplier('ts-tone-resistor')
       const toneCap = bypasses['ts-tone-cap'] ? 1e-12 : TONE_CAPACITANCE * getMultiplier('ts-tone-cap')
 
-      let toneRes = toneResBase + (1 - clamp01(toneValue)) * TONE_POT_SPAN
+      let toneRes = toneResBase
       if (bypasses['ts-tone-resistor']) toneRes = Math.max(24, toneResBase * 0.08)
-      if (bypasses['ts-tone-pot']) toneRes = toneResBase + TONE_POT_SPAN * 0.5
 
       const toneCutoff = 1 / (2 * Math.PI * Math.max(1e-12, toneRes * toneCap))
       toneShelf.frequency.value = Math.max(20, Math.min(20_000, toneCutoff))
-      toneShelf.gain.value = -12 * (1 - clamp01(toneValue))
+      // Mirror DSP tilt envelope used in worklet model.
+      toneShelf.gain.value = -10 + clamp01(toneValue) * 14
     }
 
     updateFilterVisualization()
