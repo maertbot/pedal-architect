@@ -73,7 +73,10 @@ function App() {
   useEffect(() => {
     if (!engineArmed) return
     syncCircuitSelection(audioEngine, currentCircuit, parameters)
-  }, [currentCircuit, engineArmed, parameters])
+    // Parameter updates are applied directly through setParameter handlers.
+    // Re-syncing on every parameter change can re-run setCircuit() and cause audible glitches.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentCircuit, engineArmed])
 
   useEffect(() => {
     audioEngine.setSamplePreset(selectedSample)
