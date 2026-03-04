@@ -273,7 +273,10 @@ class TubeScreamerWDFGraph {
     this.sampleRateHz = Math.max(config.sampleRate, 1)
     this.startupWarmupSamples = Math.max(512, Math.floor(this.sampleRateHz * 0.03))
     this.startupAttackSamples = Math.max(128, Math.floor(this.sampleRateHz * 0.006))
+    this.signalAttackSamples = Math.max(256, Math.floor(this.sampleRateHz * 0.012))
     this.startupCounter = 0
+    this.signalAttackCounter = 0
+    this.signalLatched = false
     this.prevOutput = 0
     this.driveResistor = new Resistor(mapDriveToResistance(config.drive))
     this.feedbackCapacitor = new Capacitor(FEEDBACK_CAPACITANCE, this.sampleRateHz)
@@ -395,8 +398,19 @@ class TubeScreamerWDFGraph {
     if (delta > maxDelta) safeOutput = this.prevOutput + maxDelta
     else if (delta < -maxDelta) safeOutput = this.prevOutput - maxDelta
 
-    const attack = Math.min(1, this.startupCounter / this.startupAttackSamples)
-    safeOutput *= attack
+    const startupAttack = Math.min(1, this.startupCounter / this.startupAttackSamples)
+    safeOutput *= startupAttack
+
+    if (!this.signalLatched && Math.abs(sample) > 1e-5) {
+      this.signalLatched = true
+      this.signalAttackCounter = 0
+    }
+
+    if (this.signalLatched && this.signalAttackCounter < this.signalAttackSamples) {
+      const signalAttack = this.signalAttackCounter / this.signalAttackSamples
+      this.signalAttackCounter += 1
+      safeOutput *= signalAttack
+    }
 
     this.prevOutput = safeOutput
     return safeOutput
