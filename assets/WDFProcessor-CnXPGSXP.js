@@ -337,6 +337,7 @@ class TubeScreamerWDFGraph {
   toneHPPrevInput = 0
   toneHPPrevOutput = 0
   toneLPState = 0
+  feedbackLPState = 0
   valueMultipliers = {}
   multipliersDirty = true
   inputCapacitance = INPUT_CAPACITANCE
@@ -454,28 +455,27 @@ class TubeScreamerWDFGraph {
   }
 
   processClipping(sample) {
-    this.clippingDiodes.bypass = this.bypassed.has('ts-clipping-diodes')
+    const dt = 1 / this.sampleRateHz
+    const driveResistance = mapDriveToResistance(this.drive)
+    const feedbackRc = Math.max(1e-12, driveResistance * this.feedbackCapacitance)
+    const feedbackAlpha = dt / (feedbackRc + dt)
 
-    this.source.setParam(sample)
-    const incident = this.source.reflect()
-    this.clippingRoot.accept(incident)
-    const reflected = this.clippingRoot.reflect()
-    this.source.accept(reflected)
+    this.feedbackLPState += feedbackAlpha * (sample - this.feedbackLPState)
 
-    if (this.bypassed.has('ts-input-resistor')) return sample
+    const inputDriveScale = this.bypassed.has('ts-input-resistor')
+      ? 1.35
+      : Math.min(2.2, INPUT_RESISTANCE / Math.max(this.inputResistanceValue, 1))
 
-    const sourceVoltageRaw = (incident + reflected) * 0.5
-    const diodeVoltageRaw = this.clippingDiodes.getVoltage()
-    const sourceVoltage = Number.isFinite(sourceVoltageRaw) ? Math.max(-4, Math.min(4, sourceVoltageRaw)) : 0
-    const diodeVoltage = Number.isFinite(diodeVoltageRaw) ? Math.max(-4, Math.min(4, diodeVoltageRaw)) : 0
-    if (this.clippingDiodes.bypass) {
-      return sourceVoltage * 0.95
+    const driveAmount = 1.4 + this.drive * 11
+    const stageInput = sample * driveAmount * inputDriveScale + this.feedbackLPState * 0.5
+
+    if (this.bypassed.has('ts-clipping-diodes')) {
+      return Math.tanh(stageInput * 0.6)
     }
-    const mixed = sourceVoltage * 0.65 + diodeVoltage * 0.35
-    if (!Number.isFinite(mixed)) {
-      return Math.tanh(sample * 3.2)
-    }
-    return mixed
+
+    // Symmetric soft clipping approximation tuned for TS-style diode feedback behavior.
+    const clipped = Math.tanh(stageInput * (2.2 + this.drive * 3.6))
+    return clipped * 0.82 + stageInput * 0.1
   }
 
   processTone(sample) {
@@ -562,9 +562,6 @@ class TubeScreamerWDFGraph {
       safeOutput = Math.tanh(safeOutput * 0.9)
     }
 
-    if (Math.abs(safeOutput) < 1e-7 && Math.abs(sample) > 1e-5) {
-      safeOutput = fallback
-    }
 
     if (this.startupCounter < this.startupWarmupSamples) {
       const mix = this.startupCounter / this.startupWarmupSamples
