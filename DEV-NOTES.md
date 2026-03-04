@@ -244,3 +244,44 @@
 - Ran `curl -sI https://registry.npmjs.org/<encoded-package>` for every package in `dependencies` and `devDependencies`.
 - Result: all package registry URLs returned HTTP `200`.
 - No new CDN URLs or runtime external HTTP dependencies were introduced by this phase.
+
+## 2026-03-04 — Phase 4 Learn Mode Tab (Interactive Lessons)
+
+### What Worked
+- Keeping lesson content fully data-driven (`src/data/learn/*.ts`) made the UI components generic and reusable across Tube Screamer, Big Muff, and Klon.
+- Reusing existing `CircuitTopology`/`ComponentNode` avoided duplicate rendering logic and preserved established bypass/multiplier visual states.
+- Centralizing learn-step state transitions in store actions (`startLesson`, `nextLearnStep`, `prevLearnStep`, `applyLearnStepState`) kept behavior deterministic and easy to reason about.
+- Reusing existing UI control classes (`bypass-toggle`, `value-slider`, `step-btn`) gave experiment controls visual consistency without new styling systems.
+
+### What Broke / Fixes Applied
+- Exiting learn mode from inside `LearnTab` could leave tablet state on `activeTab='learn'`, producing an empty pane when lesson state was cleared. Fix: force `setActiveTab('circuit')` on LearnTab exit.
+- Persisted `activeTab` can still contain `'learn'` from prior sessions while learn state is ephemeral. Fix in app flow: normalize rendering to treat `activeTab='learn'` as circuit tab whenever `learnCircuitId` is null.
+
+### What Was Surprising
+- The existing topology stack already supported lesson-mode highlighting and experiment feedback with no topology-component changes.
+- Most of the complexity was not rendering; it was keeping store state, audio-engine state, and keyboard/tab UX transitions aligned.
+
+### Gotchas
+- Lesson component IDs must exactly match WDF metadata IDs. Avoid using naming patterns that resemble component IDs for non-component fields when doing regex-based checks.
+- `startLesson` intentionally sets `activeTab` to `'circuit'` per product behavior; app-level learn visibility should rely on `learnCircuitId` to avoid conflicting tab semantics.
+- Learn state is ephemeral by design. Do not add `learnCircuitId`/`learnStepIndex` to persisted `partialize` state.
+- If you add a new experiment type, update both UI rendering (`ExperimentPanel`) and store/audio synchronization paths.
+
+### How To Extend
+- Add a new lesson by creating `src/data/learn/<circuit>.ts` and registering it in `src/data/learn/index.ts`.
+- Keep lesson steps focused on existing component IDs plus optional `experiment` payloads (`bypass`, `value`, `knob`).
+- For `knob` experiments, use `paramId` that exists on the circuit’s `parameters` definition; `ExperimentPanel` resolves controls from that model.
+- To add a new experiment type:
+  - Extend `LearnExperiment` union in `src/data/learn/types.ts`.
+  - Add UI/control handling in `ExperimentPanel.tsx`.
+  - Ensure value changes are mirrored into both store and `AudioEngine`.
+
+### Mobile/Responsive Check (375px + Desktop)
+- Desktop: `learn-container` renders three columns (`260px / 1fr / 240px`) as intended.
+- <=1024px: CSS media rule stacks learn layout to one column (`grid-template-columns: 1fr`), which fits tablet/mobile flow.
+- 375px: narration, topology, and experiment sections stack vertically; topology keeps horizontal scrolling behavior inherited from existing topology styles.
+- No layout blockers found in lint/build output; responsive behavior verified from CSS rules and integrated render structure.
+
+### Dependency Verification (Phase 4)
+- No new npm packages were added for this phase.
+- `package.json` dependencies were unchanged.

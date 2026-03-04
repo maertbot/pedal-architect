@@ -4,6 +4,7 @@ import { audioEngine, type SamplePreset } from './audio/AudioEngine'
 import { syncCircuitSelection } from './audio/syncCircuitSelection'
 import { CircuitLab } from './components/circuit-lab/CircuitLab'
 import { EnclosureDesigner } from './components/enclosure/EnclosureDesigner'
+import { LearnTab } from './components/learn/LearnTab'
 import { CIRCUITS, CIRCUIT_MAP } from './data/circuits'
 import { useStore } from './store/useStore'
 import { exportDrillTemplate } from './utils/pdfExport'
@@ -17,6 +18,7 @@ function App() {
   const enclosureSize = useStore((state) => state.enclosureSize)
   const placedComponents = useStore((state) => state.placedComponents)
   const selectedComponentId = useStore((state) => state.selectedComponentId)
+  const learnCircuitId = useStore((state) => state.learnCircuitId)
 
   const setCircuit = useStore((state) => state.setCircuit)
   const setAudioPlaying = useStore((state) => state.setAudioPlaying)
@@ -24,6 +26,8 @@ function App() {
   const resetCurrentCircuitParameters = useStore((state) => state.resetCurrentCircuitParameters)
   const setActiveTab = useStore((state) => state.setActiveTab)
   const removePlacedComponent = useStore((state) => state.removePlacedComponent)
+  const startLesson = useStore((state) => state.startLesson)
+  const exitLesson = useStore((state) => state.exitLesson)
 
   const [engineArmed, setEngineArmed] = useState(false)
   const [initError, setInitError] = useState<string | null>(null)
@@ -31,6 +35,7 @@ function App() {
 
   const isTablet = windowWidth < 1024
   const isMobile = windowWidth < 768
+  const effectiveTab = learnCircuitId ? 'learn' : activeTab === 'learn' ? 'circuit' : activeTab
 
   const initEngine = useCallback(async () => {
     try {
@@ -49,6 +54,30 @@ function App() {
     setCircuit(circuitId)
     syncCircuitSelection(audioEngine, circuitId, parameters)
   }, [parameters, setCircuit])
+
+  const getLearnCircuitId = useCallback(() => {
+    const targetCircuit = CIRCUIT_MAP[currentCircuit]
+    if (targetCircuit?.engine === 'wdf') return currentCircuit
+    return 'tube-screamer-wdf'
+  }, [currentCircuit])
+
+  const enterLearnMode = useCallback(() => {
+    const lessonCircuitId = getLearnCircuitId()
+    if (lessonCircuitId !== currentCircuit) {
+      handleCircuitSelect(lessonCircuitId)
+    }
+    startLesson(lessonCircuitId)
+    setActiveTab('learn')
+  }, [currentCircuit, getLearnCircuitId, handleCircuitSelect, setActiveTab, startLesson])
+
+  const toggleLearnMode = useCallback(() => {
+    if (learnCircuitId) {
+      exitLesson()
+      setActiveTab('circuit')
+      return
+    }
+    enterLearnMode()
+  }, [enterLearnMode, exitLesson, learnCircuitId, setActiveTab])
 
   const togglePlayback = async () => {
     if (!engineArmed) {
@@ -106,13 +135,18 @@ function App() {
         if (CIRCUITS[index]) handleCircuitSelect(CIRCUITS[index].id)
       }
 
+      if (event.key.toLowerCase() === 'l') {
+        event.preventDefault()
+        toggleLearnMode()
+      }
+
       if (event.key.toLowerCase() === 'r') {
         resetCurrentCircuitParameters()
       }
 
       if (event.key === 'Tab' && isTablet && !isMobile) {
         event.preventDefault()
-        setActiveTab(activeTab === 'circuit' ? 'enclosure' : 'circuit')
+        setActiveTab(effectiveTab === 'circuit' ? 'enclosure' : 'circuit')
       }
 
       if ((event.key === 'Delete' || event.key === 'Backspace') && selectedComponentId) {
@@ -130,6 +164,7 @@ function App() {
   }, [
     activeTab,
     enclosureSize,
+    effectiveTab,
     engineArmed,
     audioPlaying,
     isMobile,
@@ -140,6 +175,7 @@ function App() {
     selectedComponentId,
     setActiveTab,
     setAudioPlaying,
+    toggleLearnMode,
     initEngine,
     handleCircuitSelect,
   ])
@@ -196,29 +232,52 @@ function App() {
           <button type="button" className={audioPlaying ? 'action-btn stop' : 'action-btn'} onClick={() => void togglePlayback()}>
             {audioPlaying ? 'STOP' : 'PLAY'}
           </button>
+          <button type="button" className={learnCircuitId ? 'learn-btn active' : 'learn-btn'} onClick={toggleLearnMode}>
+            LEARN
+          </button>
         </div>
       </header>
 
       {isTablet && !isMobile ? (
         <div className="tab-row panel">
-          <button className={activeTab === 'circuit' ? 'mode-btn active' : 'mode-btn'} onClick={() => setActiveTab('circuit')}>
+          <button
+            className={!learnCircuitId && effectiveTab === 'circuit' ? 'mode-btn active' : 'mode-btn'}
+            onClick={() => {
+              exitLesson()
+              setActiveTab('circuit')
+            }}
+          >
             CIRCUIT LAB
           </button>
-          <button className={activeTab === 'enclosure' ? 'mode-btn active' : 'mode-btn'} onClick={() => setActiveTab('enclosure')}>
+          <button
+            className={!learnCircuitId && effectiveTab === 'enclosure' ? 'mode-btn active' : 'mode-btn'}
+            onClick={() => {
+              exitLesson()
+              setActiveTab('enclosure')
+            }}
+          >
             ENCLOSURE
+          </button>
+          <button className={learnCircuitId ? 'learn-btn active' : 'learn-btn'} onClick={toggleLearnMode}>
+            LEARN
           </button>
         </div>
       ) : null}
 
       <main className={isTablet ? 'main-workbench single' : 'main-workbench split'}>
-        {(!isTablet || activeTab === 'circuit') && (
+        {learnCircuitId ? (
+          <section className="workspace-pane">
+            <h2>{`${CIRCUIT_MAP[learnCircuitId].name} — LEARN MODE`}</h2>
+            <LearnTab audioEngine={audioEngine} />
+          </section>
+        ) : (!isTablet || effectiveTab === 'circuit') && (
           <section className="workspace-pane">
             <h2>{CIRCUIT_MAP[currentCircuit].name}</h2>
             <CircuitLab audioEngine={audioEngine} onSelectCircuit={handleCircuitSelect} />
           </section>
         )}
 
-        {!isMobile && (!isTablet || activeTab === 'enclosure') && (
+        {!learnCircuitId && !isMobile && (!isTablet || effectiveTab === 'enclosure') && (
           <section className="workspace-pane enclosure-pane">
             <h2>Enclosure Designer</h2>
             <EnclosureDesigner />
@@ -229,6 +288,7 @@ function App() {
       <footer className="bottombar panel">
         <span>[SPACE] PLAY/STOP</span>
         <span>[1-9] CIRCUITS</span>
+        <span>[L] LEARN MODE</span>
         <span>[R] RESET</span>
         <span>[CMD/CTRL+E] EXPORT PDF</span>
       </footer>

@@ -777,6 +777,202 @@ select,
   padding: 8px;
 }
 
+.learn-btn {
+  background: transparent;
+  border: 1px solid var(--accent-amber);
+  color: var(--accent-amber);
+  padding: 7px 10px;
+}
+
+.learn-btn:hover,
+.learn-btn.active {
+  background: var(--accent-amber);
+  color: #0a0a0a;
+}
+
+.learn-shell {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+}
+
+.learn-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+}
+
+.learn-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.learn-reset-btn {
+  border: 1px solid #333;
+  background: transparent;
+  color: #666;
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+.learn-exit-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid #551616;
+  color: var(--accent-red);
+  background: #111;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.learn-container {
+  display: grid;
+  grid-template-columns: 260px 1fr 240px;
+  gap: 16px;
+  height: 100%;
+  padding: 16px;
+}
+
+.learn-left {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.learn-center {
+  min-width: 0;
+}
+
+.learn-right {
+  min-width: 0;
+}
+
+.learn-stepper {
+  display: grid;
+  gap: 12px;
+}
+
+.learn-step-dots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.learn-step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.learn-step-dot.current {
+  background: var(--accent-amber);
+}
+
+.learn-step-dot.completed {
+  background: rgba(255, 176, 32, 0.4);
+}
+
+.learn-step-dot.upcoming {
+  background: #333;
+}
+
+.learn-step-title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 18px;
+  color: #fff;
+}
+
+.learn-step-narration {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  line-height: 1.6;
+  color: #e8e8e8;
+  opacity: 1;
+  animation: learn-fade-in 0.2s ease-in;
+}
+
+@keyframes learn-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.learn-step-nav {
+  margin-top: 6px;
+  display: flex;
+  gap: 8px;
+}
+
+.learn-step-nav .mode-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.experiment-panel {
+  background: #141414;
+  border-left: 2px solid var(--accent-red);
+  border-radius: 4px;
+  padding: 16px;
+}
+
+.experiment-panel.muted {
+  border-left-color: #2a2a2a;
+}
+
+.experiment-label {
+  color: var(--accent-amber);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.experiment-instruction {
+  color: #e8e8e8;
+  margin: 0 0 8px;
+  line-height: 1.45;
+  font-size: 14px;
+}
+
+.experiment-listen {
+  color: var(--accent-green);
+  font-style: italic;
+  margin: 0 0 12px;
+  line-height: 1.45;
+  font-size: 13px;
+}
+
+.experiment-control {
+  display: grid;
+  gap: 8px;
+}
+
+.experiment-target,
+.experiment-knob-readout,
+.experiment-empty,
+.experiment-explanation {
+  color: #b8b8b8;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.learn-missing {
+  padding: 12px;
+}
+
+@media (max-width: 1024px) {
+  .learn-container {
+    grid-template-columns: 1fr;
+  }
+}
+
 .bottombar {
   display: flex;
   gap: 14px;

@@ -2,10 +2,12 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { CIRCUITS, getCircuitDefaults } from '../data/circuits'
 import { getEnclosureById } from '../data/enclosures'
+import { getLesson } from '../data/learn'
+import type { LearnStep } from '../data/learn/types'
 import type { PlacedComponent } from '../audio/types'
 import type { SamplePreset } from '../audio/AudioEngine'
 
-type AppTab = 'circuit' | 'enclosure'
+type AppTab = 'circuit' | 'enclosure' | 'learn'
 
 interface AppState {
   currentCircuit: string
@@ -20,6 +22,8 @@ interface AppState {
   componentBypasses: Record<string, boolean>
   componentMultipliers: Record<string, number>
   selectedWdfComponent: string | null
+  learnCircuitId: string | null
+  learnStepIndex: number
   setCircuit: (circuitId: string) => void
   setParameter: (circuitId: string, parameterId: string, value: number) => void
   resetCurrentCircuitParameters: () => void
@@ -37,6 +41,11 @@ interface AppState {
   setComponentMultiplier: (componentId: string, multiplier: number) => void
   resetAllWdfComponents: () => void
   setSelectedWdfComponent: (componentId: string | null) => void
+  startLesson: (circuitId: string) => void
+  nextLearnStep: () => void
+  prevLearnStep: () => void
+  exitLesson: () => void
+  applyLearnStepState: (step: LearnStep) => void
 }
 
 const circuitDefaults = Object.fromEntries(CIRCUITS.map((circuit) => [circuit.id, getCircuitDefaults(circuit.id)]))
@@ -56,6 +65,8 @@ export const useStore = create<AppState>()(
       componentBypasses: {},
       componentMultipliers: {},
       selectedWdfComponent: null,
+      learnCircuitId: null,
+      learnStepIndex: 0,
       setCircuit: (circuitId) => {
         if (!circuitDefaults[circuitId]) return
         set({ currentCircuit: circuitId, highlightedBlock: null, selectedWdfComponent: null })
@@ -133,6 +144,61 @@ export const useStore = create<AppState>()(
       },
       resetAllWdfComponents: () => set({ componentBypasses: {}, componentMultipliers: {}, selectedWdfComponent: null }),
       setSelectedWdfComponent: (componentId) => set({ selectedWdfComponent: componentId }),
+      startLesson: (circuitId) => {
+        const lesson = getLesson(circuitId)
+        if (!lesson) return
+
+        get().setCircuit(circuitId)
+        get().setActiveTab('circuit')
+        set({ learnCircuitId: circuitId, learnStepIndex: 0 })
+        get().applyLearnStepState(lesson.steps[0])
+      },
+      nextLearnStep: () => {
+        const { learnCircuitId, learnStepIndex } = get()
+        if (!learnCircuitId) return
+        const lesson = getLesson(learnCircuitId)
+        if (!lesson) return
+
+        const nextIndex = Math.min(learnStepIndex + 1, lesson.steps.length - 1)
+        if (nextIndex === learnStepIndex) return
+
+        set({ learnStepIndex: nextIndex })
+        get().applyLearnStepState(lesson.steps[nextIndex])
+      },
+      prevLearnStep: () => {
+        const { learnCircuitId, learnStepIndex } = get()
+        if (!learnCircuitId) return
+        const lesson = getLesson(learnCircuitId)
+        if (!lesson) return
+
+        const prevIndex = Math.max(learnStepIndex - 1, 0)
+        if (prevIndex === learnStepIndex) return
+
+        set({ learnStepIndex: prevIndex })
+        get().applyLearnStepState(lesson.steps[prevIndex])
+      },
+      exitLesson: () => {
+        get().resetAllWdfComponents()
+        set({ learnCircuitId: null, learnStepIndex: 0 })
+      },
+      applyLearnStepState: (step) => {
+        const nextBypasses: Record<string, boolean> = {}
+        const nextMultipliers: Record<string, number> = {}
+
+        ;(step.autoBypass ?? []).forEach((componentId) => {
+          nextBypasses[componentId] = true
+        })
+
+        ;(step.autoValueOverrides ?? []).forEach(({ componentId, multiplier }) => {
+          nextMultipliers[componentId] = multiplier
+        })
+
+        set({
+          componentBypasses: nextBypasses,
+          componentMultipliers: nextMultipliers,
+          selectedWdfComponent: step.highlightComponents[0] ?? null,
+        })
+      },
     }),
     {
       name: 'pedal-architect-store-v1',
