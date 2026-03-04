@@ -484,34 +484,43 @@ class TubeScreamerWDFGraph {
   processTone(sample) {
     const dt = 1 / this.sampleRateHz
 
-    // TS808 fixed post-clip low-pass: 1k + 0.22uF (around 723 Hz).
+    // C5 + R7 fixed post-clip low-pass (1k + 0.22uF ≈ 723Hz).
     const postLpRc = Math.max(1e-12, POST_CLIP_LP_RESISTANCE * POST_CLIP_LP_CAPACITANCE)
     const postLpAlpha = dt / (postLpRc + dt)
     this.preToneLPState += postLpAlpha * (sample - this.preToneLPState)
     const postFiltered = this.preToneLPState
 
-    // Active tone network pivot primarily set by 220R + 0.22uF branch (~3.2 kHz nominal).
-    // Tone pot mostly sets blend/feedback amount, not the corner itself.
+    // Bass-side extreme in the real TS808 behaves like a stronger low-pass contour.
+    this.toneLPState += postLpAlpha * (postFiltered - this.toneLPState)
+    const secondOrderLow = this.toneLPState
+
+    // Active tone branch around R8/C6 (220R + 0.22uF nominal, ~3.2kHz corner).
     let toneResistance = this.toneResistanceBase
     if (this.bypassed.has('ts-tone-resistor')) {
       toneResistance = Math.max(24, this.toneResistanceBase * 0.08)
     }
 
     const toneCap = this.bypassed.has('ts-tone-cap') ? 1e-12 : this.toneCapacitance
-    const shelfRc = Math.max(1e-12, toneResistance * toneCap)
-    const hpAlpha = shelfRc / (shelfRc + dt)
-    const shelfHigh = hpAlpha * (this.toneHPPrevOutput + postFiltered - this.toneHPPrevInput)
+    const branchRc = Math.max(1e-12, toneResistance * toneCap)
+    const hpAlpha = branchRc / (branchRc + dt)
+    const branchHigh = hpAlpha * (this.toneHPPrevOutput + postFiltered - this.toneHPPrevInput)
     this.toneHPPrevInput = postFiltered
-    this.toneHPPrevOutput = shelfHigh
+    this.toneHPPrevOutput = branchHigh
 
-    const toneMix = clamp01(this.tone)
-    // Schematic-faithful behavior target: primarily spectral tilt, limited loudness swing.
-    const highCoeff = -0.85 + toneMix * 1.65
-    const rawTone = postFiltered + shelfHigh * highCoeff
-    const makeup = 1 / (1 + Math.abs(highCoeff) * 0.35)
+    // TS808 uses a G/W taper tone pot: more control around the middle travel.
+    const pot = this.bypassed.has('ts-tone-pot') ? 1 : clamp01(this.tone)
+    const gTaper = 0.5 + 0.5 * Math.sin((pot - 0.5) * Math.PI)
+    const bassMix = 1 - gTaper
+    const trebleMix = gTaper
 
-    this.toneLPState = rawTone * makeup
-    return this.toneLPState
+    const lowContour = secondOrderLow * (0.85 + 0.15 * bassMix)
+    const body = postFiltered * 0.55
+    const presence = branchHigh * (trebleMix * 1.45 - bassMix * 0.05)
+
+    const rawTone = lowContour * 0.55 + body + presence
+    const makeup = 0.9
+
+    return rawTone * makeup
   }
 
   addLevel(componentId, sample) {

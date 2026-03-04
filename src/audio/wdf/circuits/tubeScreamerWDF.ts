@@ -18,6 +18,11 @@ const clamp01 = (value: number): number => {
   return value
 }
 
+const mapToneToGTaper = (toneNormalized: number): number => {
+  const t = clamp01(toneNormalized)
+  return 0.5 + 0.5 * Math.sin((t - 0.5) * Math.PI)
+}
+
 export const mapDriveToResistance = (driveNormalized: number): number => {
   const normalized = clamp01(driveNormalized)
   return DRIVE_MIN_RESISTANCE + (1 - normalized) * DRIVE_SPAN_RESISTANCE
@@ -233,8 +238,11 @@ export const tubeScreamerWDF: CircuitModel = {
 
       const toneCutoff = 1 / (2 * Math.PI * Math.max(1e-12, toneRes * toneCap))
       toneShelf.frequency.value = Math.max(20, Math.min(20_000, toneCutoff))
-      // Mirror DSP tilt envelope used in worklet model.
-      toneShelf.gain.value = -10 + clamp01(toneValue) * 14
+
+      const pot = bypasses['ts-tone-pot'] ? 1 : clamp01(toneValue)
+      const gTaper = mapToneToGTaper(pot)
+      // Match worklet contour: bass side darker, treble side presence lift, limited loudness swing.
+      toneShelf.gain.value = -6 + gTaper * 8
     }
 
     updateFilterVisualization()

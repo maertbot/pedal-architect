@@ -306,3 +306,27 @@
 ### Dependency Verification (2026-03-04, Phase 5)
 - Ran `curl -sI` against `https://registry.npmjs.org/<package>` for every package in `dependencies` and `devDependencies` from `package.json`.
 - Result: all package registry endpoints returned HTTP `200`.
+
+## 2026-03-04 — TS808 ElectroSmash Alignment Pass (Compounding)
+
+### What Changed
+- Reworked TS808 `processTone()` in `src/audio/wdf/WDFProcessor.js` to better match ElectroSmash behavior:
+  - retained fixed post-clip LP (`R7/C5`: 1k + 0.22uF, ~723Hz),
+  - added explicit second-order low-pass contour for bass-side extreme,
+  - modeled active tone branch from `R8/C6` (~3.2kHz nominal) as the presence path,
+  - applied a G/W-style taper curve so control resolution is concentrated around the middle,
+  - constrained makeup gain so tone remains an EQ tilt, not a hidden volume control.
+- Updated TS808 response-panel visualization in `src/audio/wdf/circuits/tubeScreamerWDF.ts` to mirror the new contour logic (including tone-pot bypass behavior).
+
+### Validation
+- `npm test -- tests/wdf/tubeScreamerBehavior.test.ts` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+
+### Lessons Learned
+- Trying to make TS808 tone “obvious” by brute shelf gain quickly turns into volume behavior; preserving a stable body path and moving only the presence branch yields more pedal-realistic behavior.
+- Tone-cap multiplier audibility requires enough high-branch contribution in the model; if the branch weight is too conservative, topology edits look broken even when math is technically changing.
+
+### Gotchas
+- TS808 tone extremes are asymmetrical in feel (especially with G taper). Linear knob assumptions drift from expected “real pedal” behavior near noon.
+- Keep DSP and visualization equations aligned; otherwise users see one response shape and hear another.
