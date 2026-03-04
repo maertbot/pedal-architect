@@ -120,9 +120,11 @@ Neural capture (NAM/GuitarML) produces excellent audio but is a **black box** �
 │  ┌────────────────▼───────────────────────────┐  │
 │  │ WDFProcessor                               │  │
 │  │  - Runs WDF graph sample-by-sample         │  │
-│  │  - Receives param/bypass messages           │  │
+│  │  - Receives param/bypass/value messages     │  │
 │  │  - Each component is a WDF element          │  │
-│  │  - Bypass = replace element with wire       │  │
+│  │  - Context-aware bypass (series=short,      │  │
+│  │    shunt=open, feedback=safe substitute)    │  │
+│  │  - Value multiplier per component           │  │
 │  └────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────┘
 ```
@@ -230,9 +232,28 @@ interface WDFElement {
   accept(wave: number): void    // receive incident wave
   reflect(): number             // compute reflected wave
   setParam?(value: number): void
-  bypass?: boolean              // when true, element acts as wire (pass-through)
+  bypass?: boolean              // when true, element is bypassed (see bypassMode)
+  bypassMode: 'short' | 'open' | 'substitute'
+  // - 'short': series element → wire (signal passes through unchanged)
+  // - 'open': shunt element → disconnected (signal unaffected, component removed)
+  // - 'substitute': feedback element → safe neutral value (prevents instability)
+  valueMultiplier: number       // default 1.0; adjustable 0.25x–4x for exploration
+  baseValue: number             // the real-world component value (ohms, farads, etc.)
 }
 ```
+
+**Component interaction model — hybrid bypass + value exploration:**
+
+Naive "bypass = wire" would kill the signal for shunt components (shorts to ground) and cause instability for feedback components (infinite gain). Instead:
+
+1. **Context-aware bypass** — each component declares its `bypassMode` based on circuit position:
+   - Series components (in signal path): `'short'` — replace with wire, signal passes through
+   - Shunt components (to ground): `'open'` — disconnect entirely, as if physically removed
+   - Feedback components (op-amp loops): `'substitute'` — replace with a safe neutral value that prevents instability (e.g., feedback diodes → large resistor, maintaining finite gain)
+
+2. **Value multiplier** — the primary exploration tool. Every component supports 0.25x / 0.5x / 1x / 2x / 4x of its real-world value. This is MORE educational than bypass (hear what changes when a cap is bigger/smaller) and never kills the signal. The UI presents this as a slider or discrete steps.
+
+3. **Bypass reserved for safe + dramatic cases** — bypass is available on all components but the UI prominently features it only where the result is safe and instructive (e.g., TS clipping diodes → clean signal, tone caps → flat response). For shunt/feedback components, bypass still works correctly via the context-aware mode, but value exploration is the default experiment.
 
 **Tests:**
 - Unit test: Resistor with known values produces correct port resistance
@@ -247,17 +268,24 @@ The processor:
 - Receives a circuit topology description via `port.postMessage()` during setup
 - Processes audio sample-by-sample through the WDF graph
 - Handles parameter change messages (knob turns)
-- Handles bypass toggle messages (for Learn mode — Phase 4, but wire the message handling now)
+- Handles bypass toggle messages with context-aware behavior (series→short, shunt→open, feedback→substitute)
+- Handles value multiplier messages (component value scaling for exploration)
 - Reports back per-component signal levels (for UI visualization in Phase 2)
 
 The bridge node:
 - Extends `AudioWorkletNode`
-- Provides typed API: `setParameter(paramId, value)`, `bypassComponent(componentId, bypassed)`, `getComponentLevels()`
+- Provides typed API:
+  - `setParameter(paramId, value)` — knob control
+  - `bypassComponent(componentId, bypassed)` — context-aware bypass
+  - `setComponentValueMultiplier(componentId, multiplier)` — value exploration (0.25–4.0)
+  - `getComponentLevels()` — signal level readback
 - Implements `CircuitRuntime` interface so it plugs into existing AudioEngine
 
 **Tests:**
 - Integration test: Create WorkletNode, send 1kHz sine, verify output is not silence
-- Integration test: Bypass all components → output equals input (passthrough)
+- Integration test: Bypass all series components → signal still passes (not silence)
+- Integration test: Set value multiplier 2x on tone cap → measurable frequency response shift
+- Integration test: Reset all multipliers to 1.0 → output matches original
 
 ### 1C: Tube Screamer WDF Model
 **File:** `src/audio/wdf/circuits/tubeScreamerWDF.ts`
@@ -285,11 +313,21 @@ interface WDFComponentMeta {
   name: string                    // "Clipping Diodes"
   type: 'resistor' | 'capacitor' | 'diode' | 'opamp' | 'pot' | 'buffer'
   stage: string                   // "input" | "clipping" | "tone" | "output"
+  circuitRole: 'series' | 'shunt' | 'feedback'  // determines bypass behavior
   description: string             // "Two 1N914 silicon diodes wired back-to-back..."
   whyItMatters: string            // "These diodes are what makes a Tube Screamer sound..."
   whatHappensWithout: string      // "Without the diodes, the signal passes through clean..."
+  whatHappensScaled: string       // "Doubling this cap darkens the tone; halving brightens it"
   realWorldValue?: string         // "4.7kΩ" or "0.047µF" or "1N914 silicon"
   linkedParamId?: string          // which knob controls this (e.g., "drive")
+  bypassSafe: boolean             // true = bypass is safe + dramatic (feature in UI)
+                                  // false = bypass works but value slider is primary experiment
+  valueRange?: {                  // if set, value multiplier is available for this component
+    min: number                   // e.g., 0.25
+    max: number                   // e.g., 4.0
+    steps: number[]               // e.g., [0.25, 0.5, 1, 2, 4] — discrete slider stops
+    unit: string                  // e.g., "kΩ", "µF", "mV"
+  }
 }
 ```
 
@@ -330,20 +368,28 @@ interface WDFComponentMeta {
 ### CE: QA Gate (for non-SWE stakeholder)
 
 **What you're building in plain language:**
-Think of the circuit diagram on the back of a guitar pedal's box — but alive. Each component (resistor, capacitor, diode) is an interactive element you can click. Click a diode → an info panel tells you what it does. Toggle the bypass switch → that component gets removed from the circuit and you hear the difference instantly. Little signal meters pulse on each component showing how much audio is flowing through it.
+Think of the circuit diagram on the back of a guitar pedal's box — but alive. Each component (resistor, capacitor, diode) is an interactive element you can click. Click a diode → an info panel tells you what it does and gives you two ways to explore:
+
+1. **Value slider** (primary) — slide between 0.25x and 4x of the real component value. "What if this capacitor were 4x bigger?" You hear the tone change in real time. This is the main learning tool — it never kills the signal and teaches more than on/off.
+
+2. **Bypass toggle** (where safe) — for components where removal is dramatic and safe (like clipping diodes → clean signal, or tone caps → flat response), a bypass switch is prominently available. For other components, bypass is tucked behind "advanced" — it still works (correctly, using context-aware removal), but the value slider is the default experiment.
+
+Little signal meters pulse on each component showing how much audio is flowing through it.
 
 **What you'll be able to verify when done:**
 1. Select the WDF Tube Screamer → below the knobs, you'll see a signal flow diagram showing the actual circuit path
 2. Components glow phosphor green when active, go dim gray when bypassed
 3. Hover over any component → tooltip shows name and real-world value ("1N914 Silicon Diode")
 4. Click a component → info panel slides in explaining what it does
-5. Toggle bypass → you hear the change immediately AND the diagram updates
-6. Signal level meters pulse in time with the audio
-7. On mobile, everything stacks vertically and remains readable
+5. Drag the value slider on the tone cap → hear brightness change in real time
+6. Toggle bypass on clipping diodes → hear the signal go clean (bypass prominently shown for safe components)
+7. Signal level meters pulse in time with the audio
+8. On mobile, everything stacks vertically and remains readable
 
 **What's hard / risky:**
 - SVG schematic symbols need to look professional, not amateur. If they look like a high school electronics worksheet, the whole feature feels cheap. The Make Good Art quality gates will catch this.
 - Signal level meters need to be smooth (no jank) while receiving data from the audio thread. If they stutter, it breaks the "live instrument" feel.
+- Value multiplier range (0.25x–4x) needs to produce audible but not destructive changes for every component. Some components may need narrower ranges — this will be tuned per-component during implementation.
 
 ### Design Direction (Frontend Design + Make Good Art)
 
@@ -359,10 +405,12 @@ The topology view should feel like looking INSIDE the pedal through an oscillosc
 **Value structure:**
 - Background: deep black (#0a0a0a) with subtle PCB-trace grid pattern at very low opacity
 - Active components: phosphor green (#20ff60) with soft glow (box-shadow/filter)
+- Modified components (value ≠ 1x): amber (#ffb020) glow — clearly "tweaked" vs stock
 - Bypassed components: #333 with dashed outline — clearly "off" without being invisible
 - Signal flow trace: animated dash-array, phosphor green, slight bloom effect
 - Info panel: dark surface (#111) with amber (#ffb020) accent border, smooth slide-in transition
-- Bypass toggle: red (#ff2020) when active → gray when bypassed, satisfying click animation
+- Value slider: phosphor green track, amber thumb, current multiplier displayed as "2.0×" label
+- Bypass toggle: red (#ff2020) when active → gray when bypassed, satisfying click animation. Prominently shown only for `bypassSafe: true` components; available but secondary for others
 
 **Quality gates (must pass before shipping):**
 - 3-second read: Can a new user understand "this is the signal path, these are components" in 3 seconds?
@@ -403,21 +451,27 @@ interface CircuitTopology {
 - Each component rendered as a schematic-style symbol (resistor zigzag, capacitor plates, diode triangle, op-amp triangle)
 - Signal flow animated with a subtle pulse/glow traveling left-to-right (CSS animation on stroke-dasharray)
 - Bypassed components shown grayed out with dashed outline
+- Modified components (value ≠ 1x) shown with amber glow + multiplier label ("2.0×")
 - Active component highlighted on hover with tooltip (name + value)
-- Click a component → info panel slides in from right (component name, description, real-world value)
-- Click bypass toggle → sends message to AudioWorklet → audio changes immediately
+- Click a component → info panel slides in from right with two interaction modes:
+  - **Value slider** (always shown): discrete steps [0.25×, 0.5×, 1×, 2×, 4×] with real-time audio feedback. Shows actual component value at current multiplier (e.g., "0.047µF → 0.188µF at 4×"). Component-specific `whatHappensScaled` hint text below slider.
+  - **Bypass toggle** (prominent for `bypassSafe: true` components, collapsed/secondary for others): context-aware bypass with `whatHappensWithout` hint text. For non-safe components, shown under an "Advanced" disclosure.
 - Component symbols must be crisp and professional — reference real schematic symbol standards (IEEE Std 315)
+- "Reset All" button restores every component to 1× / unbypassed
 
 **Design requirements (from Frontend Design Skill):**
 - Motion: signal flow animation is THE signature moment. Invest in making it feel alive — subtle phosphor bloom, animated dash traveling left-to-right, gentle pulse on each component as signal passes through
 - Spatial composition: the signal path should dominate the view. Component labels secondary. Stage labels (Input → Clipping → Tone → Output) as subtle zone markers, not heavy borders
 - Background: subtle PCB-trace grid pattern, very low opacity (#1a1a1a lines on #0a0a0a)
 - Typography: JetBrains Mono for labels, slightly smaller weight. Component values in amber, names in white
-- Bypass toggle: compact, high-contrast. Red dot when active, gray when bypassed. Satisfying scale transition on click
+- Value slider: styled as a precision instrument — stepped detents at each multiplier, phosphor green track, amber fill showing deviation from 1× center. Current multiplier displayed prominently. Satisfying snap feel on each step.
+- Bypass toggle: compact, high-contrast. Red dot when active, gray when bypassed. Satisfying scale transition on click. Featured prominently only for safe bypass components.
 
 **Tests:**
 - Render test: TopologyRenderer mounts without errors for Tube Screamer WDF
-- Interaction test: clicking bypass toggle sends correct message to AudioWorklet
+- Interaction test: clicking bypass toggle sends correct bypassComponent message to AudioWorklet
+- Interaction test: dragging value slider sends correct setComponentValueMultiplier message
+- Interaction test: "Reset All" restores all components to default state
 - Visual QA: screenshot at 1440px desktop + 375px mobile, run through all 4 Make Good Art quality gates
 
 ### 2C: Real-Time Signal Level Indicators
@@ -441,8 +495,12 @@ interface CircuitTopology {
 - [ ] Visual QA: mobile distance read passes (375px)
 - [ ] Visual QA: NASA Mission Control aesthetic test passes
 - [ ] Manual: Tube Screamer WDF shows interactive signal flow diagram
-- [ ] Manual: clicking a component shows its info
-- [ ] Manual: toggling bypass on clipping diodes produces audible change + visual update
+- [ ] Manual: clicking a component shows info panel with value slider + bypass toggle
+- [ ] Manual: dragging value slider on tone cap produces audible brightness change
+- [ ] Manual: toggling bypass on clipping diodes (bypassSafe) produces audible change + visual update
+- [ ] Manual: bypass on non-safe component (via Advanced) works correctly without killing signal
+- [ ] Manual: "Reset All" restores all components to default
+- [ ] Manual: modified components show amber glow + multiplier label
 - [ ] Manual: signal level meters animate while audio plays
 
 ---
@@ -560,14 +618,15 @@ A guided tour of each pedal's insides. Imagine a museum audio guide, but for gui
 1. New "Learn" tab appears alongside Circuit Lab and Enclosure Designer
 2. Select a circuit → you get a step-by-step walkthrough (8 steps for Tube Screamer, 7 each for Big Muff and Klon)
 3. Each step highlights the relevant component in the circuit diagram
-4. Steps with experiments show an "Experiment" panel: "Toggle the diodes and listen for the change"
+4. Steps with experiments show an "Experiment" panel — most use value sliders ("Slide the tone cap to 4× and listen to how it darkens"), some use bypass ("Toggle the diodes off and hear the signal go clean")
 5. Audio plays throughout so you hear changes as you progress
-6. A "Reset" button restores everything to normal
+6. A "Reset" button restores everything to normal (all values to 1×, all bypasses off)
 7. Works on mobile (stacked layout)
 
 **What's hard / risky:**
 - The narration has to be genuinely good — educational but not boring, accessible but not dumbed-down. Bad writing kills this feature. The content targets curious musicians AND EE students.
-- Coordinating audio state + visual state + lesson state across three systems. If they get out of sync (diagram shows component bypassed but audio doesn't reflect it), the educational value collapses.
+- Coordinating audio state + visual state + lesson state across three systems. If they get out of sync (diagram shows component modified but audio doesn't reflect it), the educational value collapses.
+- Value multiplier experiments need good "listen for" guidance — the tonal changes from 0.5× to 2× can be subtle for some components. The narration must prime the user's ears.
 
 ### Design Direction (Frontend Design + Make Good Art)
 
@@ -639,16 +698,23 @@ interface LearnStep {
   title: string                  // "The Clipping Stage"
   narration: string              // 2-3 sentences explaining what this stage does
   highlightComponents: string[]  // component IDs to highlight in topology
-  autoBypass: string[]           // components to bypass at this step
+  autoBypass: string[]           // components to bypass at this step (only bypassSafe ones)
+  autoValueOverrides?: {         // set value multipliers at this step for demonstration
+    componentId: string
+    multiplier: number
+  }[]
   experiment?: {
-    instruction: string          // "Try toggling the diodes on and off"
-    targetComponent: string      // component to toggle
+    type: 'bypass' | 'value' | 'knob'  // which interaction mode
+    // --- bypass experiment (for bypassSafe components) ---
+    targetComponent?: string     // component to toggle bypass on
+    instruction: string          // "Toggle the diodes off and listen"
     listenFor: string            // "Notice how the tone becomes clean and thin"
-  }
-  knobSuggestion?: {
-    paramId: string
-    values: number[]             // suggested values to try
-    explanation: string          // "As you increase Drive, the diodes clip harder"
+    // --- value experiment (primary exploration tool) ---
+    suggestedValues?: number[]   // e.g., [0.25, 1, 4] — multipliers to try
+    // --- knob experiment ---
+    paramId?: string             // which knob to adjust
+    paramValues?: number[]       // suggested knob positions to try
+    explanation?: string         // "As you increase Drive, the diodes clip harder"
   }
 }
 
@@ -677,28 +743,28 @@ interface CircuitLesson {
 **Tube Screamer lesson (~8 steps):**
 1. The complete signal path overview
 2. Input buffer — why it matters for impedance
-3. The clipping stage — diodes explained, bypass experiment
-4. Drive control — how feedback resistance affects clipping
+3. The clipping stage — diodes explained, **bypass experiment** (bypassSafe: diodes → clean signal)
+4. Drive control — how feedback resistance affects clipping, **knob experiment**
 5. Why diode type matters (silicon vs germanium) — conceptual, with Klon comparison teased
-6. Tone control — RC lowpass, sweep experiment
+6. Tone control — RC lowpass, **value experiment** (slide tone cap 0.25×→4× to hear brightness shift)
 7. Volume stage — why it's after everything else
-8. The mid-hump — why the TS sounds "warm" (interaction of input coupling cap + feedback cap)
+8. The mid-hump — why the TS sounds "warm", **value experiment** (scale coupling cap to hear the mid-hump shift)
 
 **Big Muff lesson (~7 steps):**
 1. Signal path overview — "four stages of destruction"
 2. Single clipping stage explained — transistor gain + diode clipping
-3. Why four stages? Cascade experiment (bypass stages one by one)
-4. The legendary tone stack — LP/HP split and the mid-scoop
-5. Tone knob sweep — what "noon" does vs extremes
-6. Sustain control — how input gain feeds the clipping stages
+3. Why four stages? **Bypass experiment** — bypass stages one by one (all bypassSafe) to hear fuzz build
+4. The legendary tone stack — LP/HP split and the mid-scoop, **value experiment** (scale tone caps to shift the scoop frequency)
+5. Tone knob sweep — what "noon" does vs extremes, **knob experiment**
+6. Sustain control — how input gain feeds the clipping stages, **knob experiment**
 7. Why it sounds different from a Tube Screamer (architectural comparison)
 
 **Klon Centaur lesson (~7 steps):**
 1. Signal path overview — "the transparent overdrive"
-2. The clean blend — THE innovation, bypass clean path experiment
-3. Why germanium diodes? Softer clipping vs silicon (compare with TS)
-4. Gain-dependent blend — how the clean/drive ratio shifts
-5. Treble control — high-shelf, not lowpass (why it sparkles)
+2. The clean blend — THE innovation, **bypass experiment** (bypass clean path → hear transparency vanish)
+3. Why germanium diodes? **Value experiment** (scale diode forward voltage equivalent to simulate silicon vs germanium character)
+4. Gain-dependent blend — how the clean/drive ratio shifts, **knob experiment**
+5. Treble control — high-shelf, not lowpass (why it sparkles), **value experiment** (scale treble cap)
 6. Input/output buffers — impedance and why they matter on a pedalboard
 7. Why "transparent" isn't magic — it's engineering (the clean signal never leaves)
 
@@ -713,12 +779,15 @@ interface CircuitLesson {
 - [ ] Lint + build clean
 - [ ] Visual QA: 3-second read test passes for Learn tab
 - [ ] Visual QA: reading comfort test passes (dark theme typography)
-- [ ] Visual QA: experiment clarity test passes
+- [ ] Visual QA: experiment clarity test passes (both value slider and bypass experiments)
 - [ ] Visual QA: mobile layout test passes (375px, no horizontal scroll)
 - [ ] Visual QA: step transitions are smooth, not jarring
 - [ ] Manual: Learn tab loads, Tube Screamer lesson plays through all 8 steps
-- [ ] Manual: bypass experiments produce audible changes synchronized with visual changes
-- [ ] Manual: Big Muff + Klon lessons complete and all experiments work
+- [ ] Manual: value slider experiments produce audible changes (e.g., tone cap scaling)
+- [ ] Manual: bypass experiments produce audible changes (e.g., diode bypass → clean)
+- [ ] Manual: knob experiments produce audible changes synchronized with visual
+- [ ] Manual: Big Muff + Klon lessons complete and all experiment types work
+- [ ] Manual: "Reset" restores all values to 1× and all bypasses off
 - [ ] Manual: can switch between Learn tab and Circuit Lab without breaking audio
 
 ---
