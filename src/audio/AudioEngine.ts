@@ -66,15 +66,18 @@ export class AudioEngine {
     })
 
     const now = this.context.currentTime
+    const wdfStart = this.currentCircuitId.endsWith('-wdf')
+    const inputRampSeconds = wdfStart ? 0.12 : 0.02
+    const outputRampSeconds = wdfStart ? 0.16 : 0.045
 
     this.inputGain.gain.cancelScheduledValues(now)
     this.inputGain.gain.setValueAtTime(0, now)
-    this.inputGain.gain.linearRampToValueAtTime(0.65, now + 0.02)
+    this.inputGain.gain.linearRampToValueAtTime(0.65, now + inputRampSeconds)
 
     if (this.outputGain) {
       this.outputGain.gain.cancelScheduledValues(now)
       this.outputGain.gain.setValueAtTime(0, now)
-      this.outputGain.gain.linearRampToValueAtTime(0.95, now + 0.045)
+      this.outputGain.gain.linearRampToValueAtTime(0.95, now + outputRampSeconds)
     }
 
     this.source.connect(this.inputGain)
