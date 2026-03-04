@@ -244,3 +244,40 @@
 - Ran `curl -sI https://registry.npmjs.org/<encoded-package>` for every package in `dependencies` and `devDependencies`.
 - Result: all package registry URLs returned HTTP `200`.
 - No new CDN URLs or runtime external HTTP dependencies were introduced by this phase.
+
+## 2026-03-04 — Phase 4 Learn Mode Tab
+
+### What Worked
+- Reusing existing `CircuitTopology` and extending it with `highlightedComponents` + `dimOthers` avoided building a second topology renderer and kept Learn/Circuit Lab visuals consistent.
+- Keeping lesson content as typed data files (`src/data/learn/*.ts`) made the Learn UI declarative and easy to iterate without touching component logic.
+- Applying a strict per-step reset pattern (reset all bypass/multipliers first, then apply current step overrides/interaction state) prevented cross-step state bleed.
+- Using existing store and audio control actions (`setCircuit`, `setParameter`, `bypassWdfComponent`, `setWdfComponentMultiplier`) minimized risk in audio routing.
+
+### What Broke
+- Initial parallel file creation attempted to write lesson files before `src/data/learn/` existed, causing one write failure (`types.ts`).
+- Fix: create the directory first, then write files; re-ran creation for the missing file.
+
+### What Was Surprising
+- The Learn UX felt substantially clearer by dimming non-highlighted topology nodes to ~30% while pulsing highlighted nodes, even before adding additional narration animation.
+- The existing App tab structure was tablet-centric; adding Learn as a third mode required making tabs consistently visible so Learn is reachable across viewport sizes.
+
+### Gotchas
+- Lesson component references must match topology node `componentId` values exactly; a typo silently breaks highlight/experiment targeting.
+- Learn state should remain ephemeral; do not include `learnCircuitId`/`learnStepIndex` in `zustand` persistence partialization.
+- If future steps use auto-overrides, always clear prior step state first to avoid hidden component changes carrying over.
+
+### How To Extend
+- Add new lessons by creating a typed file in `src/data/learn/` and registering it in `src/data/learn/index.ts`.
+- To support richer guided behavior, use `LearnStep.autoBypass` and `LearnStep.autoValueOverrides` for deterministic per-step setup.
+- If adding new experiment types, extend `LearnStep.experiment.type` and branch in `ExperimentPanel.tsx`.
+- For topology emphasis variations, keep all visual logic in `ComponentNode.tsx` + `index.css` (`.highlighted`, `.dimmed`) so Circuit Lab remains unaffected by Learn-specific styling tweaks.
+
+### Mobile/Responsive Check
+- Desktop (`>=1024px`): Learn uses three columns (narration | topology | experiment) and a separate stepper row.
+- Tablet/Mobile (`<=1023px`): Learn stacks vertically (narration -> topology -> experiment -> stepper).
+- Mobile (`<=767px`): Learn topology overrides `min-width` to avoid horizontal page scroll while preserving overall layout stability.
+
+### Dependency Verification (2026-03-04, Phase 4)
+- Ran `curl -sI https://registry.npmjs.org/<encoded-package>` for every package in `dependencies` and `devDependencies` from `package.json`.
+- Result: all checked registry URLs returned HTTP `200`.
+- No new CDN URLs or runtime external HTTP dependencies were introduced in this phase.

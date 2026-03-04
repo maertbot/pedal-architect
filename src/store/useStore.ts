@@ -5,7 +5,7 @@ import { getEnclosureById } from '../data/enclosures'
 import type { PlacedComponent } from '../audio/types'
 import type { SamplePreset } from '../audio/AudioEngine'
 
-type AppTab = 'circuit' | 'enclosure'
+type AppTab = 'circuit' | 'enclosure' | 'learn'
 
 interface AppState {
   currentCircuit: string
@@ -20,6 +20,8 @@ interface AppState {
   componentBypasses: Record<string, boolean>
   componentMultipliers: Record<string, number>
   selectedWdfComponent: string | null
+  learnCircuitId: string | null
+  learnStepIndex: number
   setCircuit: (circuitId: string) => void
   setParameter: (circuitId: string, parameterId: string, value: number) => void
   resetCurrentCircuitParameters: () => void
@@ -37,6 +39,10 @@ interface AppState {
   setComponentMultiplier: (componentId: string, multiplier: number) => void
   resetAllWdfComponents: () => void
   setSelectedWdfComponent: (componentId: string | null) => void
+  setLearnCircuit: (circuitId: string | null) => void
+  setLearnStep: (index: number) => void
+  nextLearnStep: () => void
+  prevLearnStep: () => void
 }
 
 const circuitDefaults = Object.fromEntries(CIRCUITS.map((circuit) => [circuit.id, getCircuitDefaults(circuit.id)]))
@@ -56,6 +62,8 @@ export const useStore = create<AppState>()(
       componentBypasses: {},
       componentMultipliers: {},
       selectedWdfComponent: null,
+      learnCircuitId: null,
+      learnStepIndex: 0,
       setCircuit: (circuitId) => {
         if (!circuitDefaults[circuitId]) return
         set({ currentCircuit: circuitId, highlightedBlock: null, selectedWdfComponent: null })
@@ -133,6 +141,10 @@ export const useStore = create<AppState>()(
       },
       resetAllWdfComponents: () => set({ componentBypasses: {}, componentMultipliers: {}, selectedWdfComponent: null }),
       setSelectedWdfComponent: (componentId) => set({ selectedWdfComponent: componentId }),
+      setLearnCircuit: (circuitId) => set({ learnCircuitId: circuitId, learnStepIndex: 0 }),
+      setLearnStep: (index) => set({ learnStepIndex: Math.max(0, index) }),
+      nextLearnStep: () => set((state) => ({ learnStepIndex: state.learnStepIndex + 1 })),
+      prevLearnStep: () => set((state) => ({ learnStepIndex: Math.max(0, state.learnStepIndex - 1) })),
     }),
     {
       name: 'pedal-architect-store-v1',

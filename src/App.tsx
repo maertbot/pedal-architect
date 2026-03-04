@@ -4,6 +4,7 @@ import { audioEngine, type SamplePreset } from './audio/AudioEngine'
 import { syncCircuitSelection } from './audio/syncCircuitSelection'
 import { CircuitLab } from './components/circuit-lab/CircuitLab'
 import { EnclosureDesigner } from './components/enclosure/EnclosureDesigner'
+import { LearnTab } from './components/learn/LearnTab'
 import { CIRCUITS, CIRCUIT_MAP } from './data/circuits'
 import { useStore } from './store/useStore'
 import { exportDrillTemplate } from './utils/pdfExport'
@@ -24,6 +25,9 @@ function App() {
   const resetCurrentCircuitParameters = useStore((state) => state.resetCurrentCircuitParameters)
   const setActiveTab = useStore((state) => state.setActiveTab)
   const removePlacedComponent = useStore((state) => state.removePlacedComponent)
+  const setLearnCircuit = useStore((state) => state.setLearnCircuit)
+  const setLearnStep = useStore((state) => state.setLearnStep)
+  const resetAllWdfComponents = useStore((state) => state.resetAllWdfComponents)
 
   const [engineArmed, setEngineArmed] = useState(false)
   const [initError, setInitError] = useState<string | null>(null)
@@ -112,7 +116,9 @@ function App() {
 
       if (event.key === 'Tab' && isTablet && !isMobile) {
         event.preventDefault()
-        setActiveTab(activeTab === 'circuit' ? 'enclosure' : 'circuit')
+        if (activeTab === 'circuit') setActiveTab('learn')
+        else if (activeTab === 'learn') setActiveTab('enclosure')
+        else setActiveTab('circuit')
       }
 
       if ((event.key === 'Delete' || event.key === 'Backspace') && selectedComponentId) {
@@ -142,7 +148,17 @@ function App() {
     setAudioPlaying,
     initEngine,
     handleCircuitSelect,
+    resetAllWdfComponents,
+    setLearnCircuit,
+    setLearnStep,
   ])
+
+  useEffect(() => {
+    if (activeTab === 'learn') return
+    setLearnCircuit(null)
+    setLearnStep(0)
+    resetAllWdfComponents()
+  }, [activeTab, resetAllWdfComponents, setLearnCircuit, setLearnStep])
 
   const sampleOptions = useMemo(
     () => [
@@ -199,29 +215,37 @@ function App() {
         </div>
       </header>
 
-      {isTablet && !isMobile ? (
-        <div className="tab-row panel">
-          <button className={activeTab === 'circuit' ? 'mode-btn active' : 'mode-btn'} onClick={() => setActiveTab('circuit')}>
-            CIRCUIT LAB
-          </button>
-          <button className={activeTab === 'enclosure' ? 'mode-btn active' : 'mode-btn'} onClick={() => setActiveTab('enclosure')}>
-            ENCLOSURE
-          </button>
-        </div>
-      ) : null}
+      <div className="tab-row panel">
+        <button className={activeTab === 'circuit' ? 'mode-btn active' : 'mode-btn'} onClick={() => setActiveTab('circuit')}>
+          CIRCUIT LAB
+        </button>
+        <button className={activeTab === 'learn' ? 'mode-btn active' : 'mode-btn'} onClick={() => setActiveTab('learn')}>
+          LEARN
+        </button>
+        <button className={activeTab === 'enclosure' ? 'mode-btn active' : 'mode-btn'} onClick={() => setActiveTab('enclosure')}>
+          ENCLOSURE
+        </button>
+      </div>
 
       <main className={isTablet ? 'main-workbench single' : 'main-workbench split'}>
-        {(!isTablet || activeTab === 'circuit') && (
+        {activeTab === 'circuit' && (
           <section className="workspace-pane">
             <h2>{CIRCUIT_MAP[currentCircuit].name}</h2>
             <CircuitLab audioEngine={audioEngine} onSelectCircuit={handleCircuitSelect} />
           </section>
         )}
 
-        {!isMobile && (!isTablet || activeTab === 'enclosure') && (
+        {activeTab === 'enclosure' && (
           <section className="workspace-pane enclosure-pane">
             <h2>Enclosure Designer</h2>
             <EnclosureDesigner />
+          </section>
+        )}
+
+        {activeTab === 'learn' && (
+          <section className="workspace-pane learn-pane">
+            <h2>Learn Mode</h2>
+            <LearnTab audioEngine={audioEngine} />
           </section>
         )}
       </main>

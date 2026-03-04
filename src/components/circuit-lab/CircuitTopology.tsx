@@ -9,6 +9,8 @@ interface CircuitTopologyProps {
   bypasses: Record<string, boolean>
   multipliers: Record<string, number>
   selectedComponent: string | null
+  highlightedComponents?: string[]
+  dimOthers?: boolean
   levels: Record<string, number>
   onSelectComponent: (componentId: string | null) => void
 }
@@ -100,10 +102,13 @@ export function CircuitTopology({
   bypasses,
   multipliers,
   selectedComponent,
+  highlightedComponents = [],
+  dimOthers = false,
   levels,
   onSelectComponent,
 }: CircuitTopologyProps) {
   const componentMap = useMemo(() => new Map(components.map((component) => [component.id, component])), [components])
+  const highlightedSet = useMemo(() => new Set(highlightedComponents), [highlightedComponents])
 
   return (
     <section className="panel topology-panel">
@@ -141,6 +146,8 @@ export function CircuitTopology({
                 node={node}
                 meta={component}
                 selected={selectedComponent === node.componentId}
+                highlighted={highlightedSet.has(node.componentId)}
+                dimmed={dimOthers && highlightedSet.size > 0 && !highlightedSet.has(node.componentId)}
                 bypassed={Boolean(bypasses[node.componentId])}
                 multiplier={multipliers[node.componentId] ?? 1}
                 level={levels[node.componentId] ?? 0}

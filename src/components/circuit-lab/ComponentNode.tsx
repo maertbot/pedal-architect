@@ -8,6 +8,8 @@ interface ComponentNodeProps {
   bypassed: boolean
   multiplier: number
   level: number
+  highlighted?: boolean
+  dimmed?: boolean
   onSelect: (componentId: string) => void
 }
 
@@ -88,9 +90,26 @@ function renderSymbol(node: TopologyNode) {
   return <line x1={left} y1={node.y} x2={right} y2={node.y} strokeWidth="1.8" />
 }
 
-export function ComponentNode({ node, meta, selected, bypassed, multiplier, level, onSelect }: ComponentNodeProps) {
+export function ComponentNode({
+  node,
+  meta,
+  selected,
+  bypassed,
+  multiplier,
+  level,
+  highlighted = false,
+  dimmed = false,
+  onSelect,
+}: ComponentNodeProps) {
   const isModified = Math.abs(multiplier - 1) > 1e-6
-  const className = ['topology-component', selected ? 'selected' : '', bypassed ? 'bypassed' : '', isModified ? 'modified' : '']
+  const className = [
+    'topology-component',
+    selected ? 'selected' : '',
+    bypassed ? 'bypassed' : '',
+    isModified ? 'modified' : '',
+    highlighted ? 'highlighted' : '',
+    dimmed ? 'dimmed' : '',
+  ]
     .filter(Boolean)
     .join(' ')
   const labelLines = splitLabel(meta.name)
