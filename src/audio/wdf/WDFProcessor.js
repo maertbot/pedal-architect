@@ -238,8 +238,11 @@ const INPUT_RESISTANCE = 4_700
 const FEEDBACK_CAPACITANCE = 0.047e-6
 const DRIVE_MIN_RESISTANCE = 51_000
 const DRIVE_SPAN_RESISTANCE = 500_000
-const TONE_MIN_CUTOFF_HZ = 250
-const TONE_MAX_CUTOFF_HZ = 9_000
+const TONE_RESISTANCE_BASE = 220
+const TONE_POT_SPAN = 20_000
+const TONE_CAPACITANCE = 0.22e-6
+const TONE_HIGHPASS_CAPACITANCE = 0.1e-6
+const TONE_HIGHPASS_RESISTANCE = 10_000
 
 const clamp01 = (value) => {
   if (value < 0) return 0
@@ -252,9 +255,10 @@ const mapDriveToResistance = (driveNormalized) => {
   return DRIVE_MIN_RESISTANCE + (1 - normalized) * DRIVE_SPAN_RESISTANCE
 }
 
-const mapToneToCutoffHz = (toneNormalized) => {
+const mapToneToResistance = (toneNormalized) => {
+  // Tone up should sound brighter on a TS-style control.
   const t = clamp01(toneNormalized)
-  return TONE_MIN_CUTOFF_HZ * (TONE_MAX_CUTOFF_HZ / TONE_MIN_CUTOFF_HZ) ** t
+  return TONE_RESISTANCE_BASE + (1 - t) * TONE_POT_SPAN
 }
 
 class TubeScreamerWDFGraph {
@@ -270,7 +274,9 @@ class TubeScreamerWDFGraph {
   bypassed = new Set()
   hpPrevInput = 0
   hpPrevOutput = 0
-  toneState = 0
+  toneHPPrevInput = 0
+  toneHPPrevOutput = 0
+  toneLPState = 0
 
   constructor(config) {
     this.sampleRateHz = Math.max(config.sampleRate, 1)
@@ -376,20 +382,21 @@ class TubeScreamerWDFGraph {
       return sample
     }
 
-    // TS-style post-clipping tone voicing: low/high spectral tilt around a moving pole.
-    const cutoffHz = mapToneToCutoffHz(this.tone)
-    const alpha = Math.exp((-2 * Math.PI * cutoffHz) / this.sampleRateHz)
+    // PRD topology: 0.1uF highpass roll-off + RC lowpass with 220R + 0-20k tone pot and 0.22uF cap.
+    const dt = 1 / this.sampleRateHz
 
-    this.toneState = (1 - alpha) * sample + alpha * this.toneState
-    const lowBand = this.toneState
-    const highBand = sample - lowBand
+    const hpRc = TONE_HIGHPASS_RESISTANCE * TONE_HIGHPASS_CAPACITANCE
+    const hpAlpha = hpRc / (hpRc + dt)
+    const highPassed = hpAlpha * (this.toneHPPrevOutput + sample - this.toneHPPrevInput)
+    this.toneHPPrevInput = sample
+    this.toneHPPrevOutput = highPassed
 
-    const t = this.tone
-    const lowGain = 1.15 - 0.65 * t
-    const highGain = 0.3 + 1.45 * t
+    const toneResistance = mapToneToResistance(this.tone)
+    const lpRc = toneResistance * TONE_CAPACITANCE
+    const lpAlpha = dt / (lpRc + dt)
+    this.toneLPState += lpAlpha * (highPassed - this.toneLPState)
 
-    const shaped = lowBand * lowGain + highBand * highGain
-    return Math.tanh(shaped * 0.95)
+    return this.toneLPState
   }
 
   processSample(sample) {

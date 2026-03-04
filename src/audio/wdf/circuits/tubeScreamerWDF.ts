@@ -4,8 +4,11 @@ import { WDFWorkletNode } from '../WDFWorkletNode.js'
 
 const DRIVE_MIN_RESISTANCE = 51_000
 const DRIVE_SPAN_RESISTANCE = 500_000
-const TONE_MIN_CUTOFF_HZ = 250
-const TONE_MAX_CUTOFF_HZ = 9_000
+const TONE_RESISTANCE_BASE = 220
+const TONE_POT_SPAN = 20_000
+const TONE_CAPACITANCE = 0.22e-6
+const TONE_HIGHPASS_RESISTANCE = 10_000
+const TONE_HIGHPASS_CAPACITANCE = 0.1e-6
 
 const clamp01 = (value: number): number => {
   if (value < 0) return 0
@@ -18,9 +21,14 @@ export const mapDriveToResistance = (driveNormalized: number): number => {
   return DRIVE_MIN_RESISTANCE + (1 - normalized) * DRIVE_SPAN_RESISTANCE
 }
 
-export const mapToneToCutoffHz = (toneNormalized: number): number => {
+export const mapToneToResistance = (toneNormalized: number): number => {
   const t = clamp01(toneNormalized)
-  return TONE_MIN_CUTOFF_HZ * (TONE_MAX_CUTOFF_HZ / TONE_MIN_CUTOFF_HZ) ** t
+  return TONE_RESISTANCE_BASE + (1 - t) * TONE_POT_SPAN
+}
+
+export const mapToneToCutoffHz = (toneNormalized: number): number => {
+  const resistance = mapToneToResistance(toneNormalized)
+  return 1 / (2 * Math.PI * resistance * TONE_CAPACITANCE)
 }
 
 export const tubeScreamerWDFComponents: WDFComponentMeta[] = [
@@ -139,7 +147,8 @@ export const tubeScreamerWDF: CircuitModel = {
 
     const hasBiquad = typeof globalThis.BiquadFilterNode !== 'undefined'
 
-    const inputHP = hasBiquad ? new BiquadFilterNode(ctx, { type: 'highpass', frequency: 720, Q: 0.7 }) : null
+    const toneHighpassHz = 1 / (2 * Math.PI * TONE_HIGHPASS_RESISTANCE * TONE_HIGHPASS_CAPACITANCE)
+    const inputHP = hasBiquad ? new BiquadFilterNode(ctx, { type: 'highpass', frequency: toneHighpassHz, Q: 0.7 }) : null
     const toneLP = hasBiquad ? new BiquadFilterNode(ctx, { type: 'lowpass', frequency: mapToneToCutoffHz(0.5), Q: 0.8 }) : null
     const midShape = hasBiquad ? new BiquadFilterNode(ctx, { type: 'peaking', frequency: 900, Q: 0.95, gain: 2.5 }) : null
 
