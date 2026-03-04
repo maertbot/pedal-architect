@@ -1,11 +1,11 @@
-import type { CircuitModel } from '../../types.js'
+import type { CircuitModel, FilterNodeDescriptor } from '../../types.js'
 import type { WDFComponentMeta } from '../types.js'
 import { WDFWorkletNode } from '../WDFWorkletNode.js'
 
 const DRIVE_MIN_RESISTANCE = 51_000
 const DRIVE_SPAN_RESISTANCE = 500_000
-const TONE_BASE_RESISTANCE = 220
-const TONE_POT_SPAN = 20_000
+const TONE_MIN_CUTOFF_HZ = 720
+const TONE_MAX_CUTOFF_HZ = 4_500
 
 const clamp01 = (value: number): number => {
   if (value < 0) return 0
@@ -18,8 +18,9 @@ export const mapDriveToResistance = (driveNormalized: number): number => {
   return DRIVE_MIN_RESISTANCE + (1 - normalized) * DRIVE_SPAN_RESISTANCE
 }
 
-export const mapToneToResistance = (toneNormalized: number): number => {
-  return TONE_BASE_RESISTANCE + clamp01(toneNormalized) * TONE_POT_SPAN
+export const mapToneToCutoffHz = (toneNormalized: number): number => {
+  const t = clamp01(toneNormalized)
+  return TONE_MIN_CUTOFF_HZ * (TONE_MAX_CUTOFF_HZ / TONE_MIN_CUTOFF_HZ) ** t
 }
 
 export const tubeScreamerWDFComponents: WDFComponentMeta[] = [
@@ -136,12 +137,35 @@ export const tubeScreamerWDF: CircuitModel = {
       level: 0.8,
     })
 
+    const hasBiquad = typeof globalThis.BiquadFilterNode !== 'undefined'
+
+    const inputHP = hasBiquad ? new BiquadFilterNode(ctx, { type: 'highpass', frequency: 720, Q: 0.7 }) : null
+    const toneLP = hasBiquad ? new BiquadFilterNode(ctx, { type: 'lowpass', frequency: mapToneToCutoffHz(0.5), Q: 0.8 }) : null
+    const midShape = hasBiquad ? new BiquadFilterNode(ctx, { type: 'peaking', frequency: 900, Q: 0.95, gain: 2.5 }) : null
+
+    const filterNodes: FilterNodeDescriptor[] = inputHP && toneLP && midShape
+      ? [
+          { node: inputHP, topology: 'series', label: 'Input HP' },
+          { node: toneLP, topology: 'series', label: 'Tone LP', paramId: 'tone' },
+          { node: midShape, topology: 'series', label: 'Mid Shape' },
+        ]
+      : []
+
     return {
       input: node,
       output: node,
       setParameter: (paramId, value) => {
         node.setParameter(paramId, value)
+
+        if (paramId === 'tone' && toneLP) {
+          toneLP.frequency.value = mapToneToCutoffHz(value)
+        }
+
+        if (paramId === 'drive' && midShape) {
+          midShape.gain.value = 1.5 + clamp01(value) * 3
+        }
       },
+      getFilterNodes: () => filterNodes,
       destroy: () => {
         node.disconnect()
       },
