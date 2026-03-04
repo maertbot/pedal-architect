@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AudioEngine } from '../../audio/AudioEngine'
 import { getTopology } from '../../audio/wdf/topology'
+import { bigMuffWDFComponents } from '../../audio/wdf/circuits/bigMuffWDF'
+import { klonCentaurWDFComponents } from '../../audio/wdf/circuits/klonCentaurWDF'
 import { tubeScreamerWDFComponents } from '../../audio/wdf/circuits/tubeScreamerWDF'
 import { CIRCUIT_MAP } from '../../data/circuits'
 import { useStore } from '../../store/useStore'
@@ -38,10 +40,12 @@ export function CircuitLab({ audioEngine, onSelectCircuit }: CircuitLabProps) {
 
   const circuit = useMemo(() => CIRCUIT_MAP[currentCircuit], [currentCircuit])
   const topology = useMemo(() => getTopology(currentCircuit), [currentCircuit])
-  const wdfComponents = useMemo(
-    () => (currentCircuit === 'tube-screamer-wdf' ? tubeScreamerWDFComponents : []),
-    [currentCircuit],
-  )
+  const wdfComponents = useMemo(() => {
+    if (currentCircuit === 'tube-screamer-wdf') return tubeScreamerWDFComponents
+    if (currentCircuit === 'big-muff-wdf') return bigMuffWDFComponents
+    if (currentCircuit === 'klon-centaur-wdf') return klonCentaurWDFComponents
+    return []
+  }, [currentCircuit])
   const selectedComponentMeta = useMemo(
     () => wdfComponents.find((component) => component.id === selectedWdfComponent) ?? null,
     [selectedWdfComponent, wdfComponents],

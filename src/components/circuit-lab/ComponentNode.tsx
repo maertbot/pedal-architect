@@ -13,6 +13,16 @@ interface ComponentNodeProps {
 
 const formatMultiplier = (value: number): string => `${value.toFixed(2).replace(/\.00$/, '')}x`
 
+function splitLabel(name: string): string[] {
+  const words = name.trim().split(/\s+/)
+  if (words.length <= 2) return [name]
+
+  const midpoint = Math.ceil(words.length / 2)
+  const first = words.slice(0, midpoint).join(' ')
+  const second = words.slice(midpoint).join(' ')
+  return [first, second]
+}
+
 function renderSymbol(node: TopologyNode) {
   const left = node.x - node.width / 2
   const right = node.x + node.width / 2
@@ -83,6 +93,10 @@ export function ComponentNode({ node, meta, selected, bypassed, multiplier, leve
   const className = ['topology-component', selected ? 'selected' : '', bypassed ? 'bypassed' : '', isModified ? 'modified' : '']
     .filter(Boolean)
     .join(' ')
+  const labelLines = splitLabel(meta.name)
+  const labelBaseY = node.y + node.height / 2 + 14
+  const valueY = labelBaseY + (labelLines.length - 1) * 10 + 12
+  const multiplierY = valueY + 11
 
   const meterHeight = Math.max(0, Math.min(1, level)) * 20
 
@@ -98,12 +112,18 @@ export function ComponentNode({ node, meta, selected, bypassed, multiplier, leve
         height={meterHeight}
         rx={1}
       />
-      <text className="component-label" x={node.x} y={node.y + node.height / 2 + 13} textAnchor="middle">{meta.name}</text>
+      <text className="component-label" x={node.x} y={labelBaseY} textAnchor="middle">
+        {labelLines.map((line, index) => (
+          <tspan key={`${node.componentId}-line-${index}`} x={node.x} dy={index === 0 ? 0 : 10}>
+            {line}
+          </tspan>
+        ))}
+      </text>
       {meta.realWorldValue ? (
-        <text className="component-value" x={node.x} y={node.y + node.height / 2 + 24} textAnchor="middle">{meta.realWorldValue}</text>
+        <text className="component-value" x={node.x} y={valueY} textAnchor="middle">{meta.realWorldValue}</text>
       ) : null}
       {isModified ? (
-        <text className="multiplier-label" x={node.x} y={node.y + node.height / 2 + 35} textAnchor="middle">
+        <text className="multiplier-label" x={node.x} y={multiplierY} textAnchor="middle">
           {formatMultiplier(multiplier)}
         </text>
       ) : null}

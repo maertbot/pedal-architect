@@ -1,5 +1,5 @@
 import type {
-  TubeScreamerWDFConfig,
+  WDFCircuitConfig,
   WDFBypassMessage,
   WDFLevelsMessage,
   WDFParamMessage,
@@ -12,7 +12,7 @@ export class WDFWorkletNode extends AudioWorkletNode {
 
   private levelsCallbacks = new Set<(levels: Record<string, number>) => void>()
 
-  constructor(context: AudioContext, config: TubeScreamerWDFConfig) {
+  constructor(context: AudioContext, config: WDFCircuitConfig) {
     super(context, 'wdf-processor', {
       numberOfInputs: 1,
       numberOfOutputs: 1,
@@ -21,7 +21,7 @@ export class WDFWorkletNode extends AudioWorkletNode {
 
     const setup: WDFSetupMessage = {
       type: 'setup',
-      circuit: 'tube-screamer-ts808',
+      circuit: config.circuit,
       config,
     }
     this.port.postMessage(setup)
@@ -33,7 +33,7 @@ export class WDFWorkletNode extends AudioWorkletNode {
     }
   }
 
-  static async create(context: AudioContext, config: TubeScreamerWDFConfig): Promise<WDFWorkletNode> {
+  static async create(context: AudioContext, config: WDFCircuitConfig): Promise<WDFWorkletNode> {
     const processorUrl = new URL('./WDFProcessor.js', import.meta.url).href
     await context.audioWorklet.addModule(processorUrl)
     return new WDFWorkletNode(context, config)

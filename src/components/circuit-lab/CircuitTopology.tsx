@@ -18,10 +18,10 @@ interface Point {
   y: number
 }
 
-const TRACE_Y = 170
-const GROUND_Y = 340
-const FEEDBACK_LOOP_Y = 88
-const SHUNT_BRANCH_Y = 258
+const TRACE_Y = 210
+const GROUND_Y = 394
+const FEEDBACK_LOOP_Y = 108
+const SHUNT_BRANCH_Y = 306
 
 function getNodeById(nodes: TopologyNode[], componentId: string): TopologyNode | undefined {
   return nodes.find((node) => node.componentId === componentId)
@@ -126,7 +126,7 @@ export function CircuitTopology({
           ))}
 
           {topology.stages.map((stage) => (
-            <text key={stage.id} x={(stage.startX + stage.endX) / 2} y={26} textAnchor="middle" className="stage-label">
+            <text key={stage.id} x={(stage.startX + stage.endX) / 2} y={30} textAnchor="middle" className="stage-label">
               {stage.name}
             </text>
           ))}

@@ -213,3 +213,34 @@
 ### Dependency Verification (2026-03-04, This Change)
 - Ran `curl -sI https://registry.npmjs.org/<package>` for every package in `dependencies` and `devDependencies`.
 - Result: all package registry URLs returned HTTP `200` (no 404s).
+
+## 2026-03-04 — Phase 3 Big Muff Pi + Klon Centaur WDF Models
+
+### What Worked
+- Reusing the Tube Screamer worklet patterns (smoothed params, startup warmup/attack ramps, output safety fallback, periodic RMS level reporting) made the two new graph classes integrate without changes to UI rendering components.
+- A single setup factory in `WDFProcessor.js` keyed by `config.circuit` cleanly enabled multi-circuit WDF routing while preserving the existing TS path.
+- Modeling Big Muff as cascaded stage HP coupling + WDF diode clipping + inter-stage `tanh` normalization kept the cascade stable under high sustain values.
+- Modeling Klon with explicit parallel clean/drive split outside the WDF clipping subtree preserved the expected clean-blend behavior and made gain interaction straightforward to tune.
+
+### What Broke / Fixes Applied
+- Initial dependency verification command mixed a Node heredoc and shell pipe incorrectly, causing a syntax error. Fix: replaced with a shell loop that reads package names from Node and executes `curl -sI` per registry URL.
+- `CircuitLab.tsx` originally mapped WDF component metadata only for Tube Screamer, which would leave new WDF topologies without metadata panels. Fix: added explicit mappings for `big-muff-wdf` and `klon-centaur-wdf`.
+
+### What Was Surprising
+- The topology renderer’s generic orthogonal routing already handled Klon’s fork/merge layout without any `CircuitTopology.tsx` changes.
+- Big Muff’s stage-to-stage amplitude normalization was critical; without inter-stage soft limiting, later diode stages quickly saturated into near-constant output.
+
+### Gotchas
+- Keep `config.circuit` duplicated in both setup message and config payload for compatibility; graph selection currently relies on `message.config.circuit`.
+- Topology node IDs must exactly match WDF component metadata IDs; otherwise nodes render blank (filtered out by `componentMap`).
+- For new WDF circuits, update `CircuitLab.tsx` component metadata mapping or topology UI will appear with missing component details.
+
+### How To Extend
+- If adding more WDF pedals, keep per-circuit graph classes self-contained in `WDFProcessor.js` and only expose them through the setup factory.
+- Consider extracting shared startup/safety/level-report behavior into reusable helper mixins inside `WDFProcessor.js` to reduce duplicated logic across graph classes.
+- Add regression tests for topology integrity (node IDs + connection endpoints) and bounded-output DSP sweeps for each WDF circuit.
+
+### Dependency Verification (2026-03-04, Phase 3)
+- Ran `curl -sI https://registry.npmjs.org/<encoded-package>` for every package in `dependencies` and `devDependencies`.
+- Result: all package registry URLs returned HTTP `200`.
+- No new CDN URLs or runtime external HTTP dependencies were introduced by this phase.

@@ -184,6 +184,7 @@ export const tubeScreamerWDF: CircuitModel = {
   create: (ctx) => {
     const node = new WDFWorkletNode(ctx, {
       sampleRate: ctx.sampleRate,
+      circuit: 'tube-screamer-ts808',
       drive: 0.55,
       tone: 0.5,
       level: 0.8,
