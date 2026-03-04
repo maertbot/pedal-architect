@@ -238,8 +238,8 @@ const INPUT_RESISTANCE = 4_700
 const FEEDBACK_CAPACITANCE = 0.047e-6
 const DRIVE_MIN_RESISTANCE = 51_000
 const DRIVE_SPAN_RESISTANCE = 500_000
-const TONE_MIN_CUTOFF_HZ = 720
-const TONE_MAX_CUTOFF_HZ = 4_500
+const TONE_MIN_CUTOFF_HZ = 250
+const TONE_MAX_CUTOFF_HZ = 9_000
 
 const clamp01 = (value) => {
   if (value < 0) return 0
@@ -271,6 +271,7 @@ class TubeScreamerWDFGraph {
   hpPrevInput = 0
   hpPrevOutput = 0
   toneState = 0
+  toneState2 = 0
 
   constructor(config) {
     this.sampleRateHz = Math.max(config.sampleRate, 1)
@@ -378,8 +379,12 @@ class TubeScreamerWDFGraph {
 
     const cutoffHz = mapToneToCutoffHz(this.tone)
     const alpha = Math.exp((-2 * Math.PI * cutoffHz) / this.sampleRateHz)
+
+    // Two cascaded one-pole lowpass stages for a more audible tone sweep.
     this.toneState = (1 - alpha) * sample + alpha * this.toneState
-    return this.toneState
+    this.toneState2 = (1 - alpha) * this.toneState + alpha * this.toneState2
+
+    return this.toneState2
   }
 
   processSample(sample) {
