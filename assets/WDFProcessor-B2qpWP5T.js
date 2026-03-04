@@ -419,7 +419,7 @@ class TubeScreamerWDFGraph {
 
 class WDFProcessor extends AudioWorkletProcessor {
   graph = null
-  startupSilentBlocks = 6
+  startupSilentBlocks = 24
 
   constructor() {
     super()
@@ -431,7 +431,8 @@ class WDFProcessor extends AudioWorkletProcessor {
   handleMessage(message) {
     if (message.type === 'setup') {
       this.graph = new TubeScreamerWDFGraph(message.config)
-      this.startupSilentBlocks = 6
+      this.startupSilentBlocks = 24
+      this.prevOutput = 0
       return
     }
 
