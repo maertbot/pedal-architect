@@ -18,8 +18,10 @@ interface Point {
   y: number
 }
 
-const TRACE_Y = 110
-const GROUND_Y = 196
+const TRACE_Y = 170
+const GROUND_Y = 340
+const FEEDBACK_LOOP_Y = 88
+const SHUNT_BRANCH_Y = 258
 
 function getNodeById(nodes: TopologyNode[], componentId: string): TopologyNode | undefined {
   return nodes.find((node) => node.componentId === componentId)
@@ -34,6 +36,7 @@ function buildConnectionPath(
 ): string {
   const fromNode = getNodeById(nodes, connection.from)
   const toNode = getNodeById(nodes, connection.to)
+  const fromMeta = fromNode ? componentMap.get(fromNode.componentId) : undefined
   const toMeta = toNode ? componentMap.get(toNode.componentId) : undefined
 
   const fromPoint: Point = connection.from === 'INPUT'
@@ -41,7 +44,9 @@ function buildConnectionPath(
     : fromNode
       ? {
           x: fromNode.x + fromNode.width / 2,
-          y: connection.to === 'GROUND' || toMeta?.circuitRole === 'shunt' ? fromNode.y + fromNode.height / 2 : fromNode.y,
+          y: connection.to === 'GROUND' || toMeta?.circuitRole === 'shunt'
+            ? fromNode.y + fromNode.height / 2
+            : fromNode.y,
         }
       : { x: signalInputX, y: TRACE_Y }
 
@@ -50,17 +55,42 @@ function buildConnectionPath(
     : connection.to === 'GROUND'
       ? { x: fromPoint.x, y: GROUND_Y }
       : toNode
-        ? {
-            x: toNode.x - toNode.width / 2,
-            y: toMeta?.circuitRole === 'feedback' ? toNode.y : toNode.y,
-          }
+        ? { x: toNode.x - toNode.width / 2, y: toNode.y }
         : { x: signalOutputX, y: TRACE_Y }
+
+  if (connection.to === 'GROUND') {
+    return `M${fromPoint.x} ${fromPoint.y} L${fromPoint.x} ${GROUND_Y}`
+  }
+
+  const fromRole = fromMeta?.circuitRole
+  const toRole = toMeta?.circuitRole
+
+  if (fromRole === 'series' && toRole === 'feedback') {
+    return `M${fromPoint.x} ${fromPoint.y} L${fromPoint.x} ${FEEDBACK_LOOP_Y} L${toPoint.x} ${FEEDBACK_LOOP_Y} L${toPoint.x} ${toPoint.y}`
+  }
+
+  if (fromRole === 'feedback' && toRole === 'feedback') {
+    if (Math.abs(fromPoint.y - toPoint.y) < 1) {
+      return `M${fromPoint.x} ${fromPoint.y} L${toPoint.x} ${toPoint.y}`
+    }
+    return `M${fromPoint.x} ${fromPoint.y} L${fromPoint.x} ${FEEDBACK_LOOP_Y} L${toPoint.x} ${FEEDBACK_LOOP_Y} L${toPoint.x} ${toPoint.y}`
+  }
+
+  if (fromRole === 'feedback' && toRole === 'series') {
+    return `M${fromPoint.x} ${fromPoint.y} L${fromPoint.x} ${FEEDBACK_LOOP_Y} L${toPoint.x} ${FEEDBACK_LOOP_Y} L${toPoint.x} ${toPoint.y}`
+  }
+
+  if (toRole === 'shunt') {
+    return `M${fromPoint.x} ${fromPoint.y} L${fromPoint.x} ${SHUNT_BRANCH_Y} L${toPoint.x} ${SHUNT_BRANCH_Y} L${toPoint.x} ${toPoint.y}`
+  }
 
   if (Math.abs(fromPoint.y - toPoint.y) < 1) {
     return `M${fromPoint.x} ${fromPoint.y} L${toPoint.x} ${toPoint.y}`
   }
 
-  const midX = Math.round((fromPoint.x + toPoint.x) / 2)
+  const midX = fromPoint.x < toPoint.x
+    ? Math.round(fromPoint.x + (toPoint.x - fromPoint.x) * 0.5)
+    : Math.round(toPoint.x + (fromPoint.x - toPoint.x) * 0.5)
   return `M${fromPoint.x} ${fromPoint.y} L${midX} ${fromPoint.y} L${midX} ${toPoint.y} L${toPoint.x} ${toPoint.y}`
 }
 

@@ -363,8 +363,8 @@ select,
 
 .topology-svg {
   width: 100%;
-  min-width: 780px;
-  height: 230px;
+  min-width: 620px;
+  height: 380px;
   display: block;
 }
 
@@ -836,7 +836,7 @@ select,
   }
 
   .topology-svg {
-    min-width: 760px;
+    min-width: 620px;
   }
 
   .component-info-panel {
