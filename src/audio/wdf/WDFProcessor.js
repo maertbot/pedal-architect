@@ -291,6 +291,8 @@ const TONE_POT_SPAN = 20_000
 const TONE_CAPACITANCE = 0.22e-6
 const TONE_HIGHPASS_CAPACITANCE = 0.1e-6
 const TONE_HIGHPASS_RESISTANCE = 10_000
+const POST_CLIP_LP_RESISTANCE = 1_000
+const POST_CLIP_LP_CAPACITANCE = 0.22e-6
 const LEVEL_REPORT_INTERVAL_SAMPLES = 2_940
 const COMPONENT_IDS = [
   'ts-input-cap',
@@ -337,6 +339,7 @@ class TubeScreamerWDFGraph {
   toneHPPrevInput = 0
   toneHPPrevOutput = 0
   toneLPState = 0
+  preToneLPState = 0
   feedbackLPState = 0
   valueMultipliers = {}
   multipliersDirty = true
@@ -479,31 +482,35 @@ class TubeScreamerWDFGraph {
   }
 
   processTone(sample) {
-    // PRD topology: 0.1uF highpass roll-off + RC lowpass with 220R + 0-20k tone pot and 0.22uF cap.
     const dt = 1 / this.sampleRateHz
 
-    const hpRc = TONE_HIGHPASS_RESISTANCE * TONE_HIGHPASS_CAPACITANCE
-    const hpAlpha = hpRc / (hpRc + dt)
-    const highPassed = hpAlpha * (this.toneHPPrevOutput + sample - this.toneHPPrevInput)
-    this.toneHPPrevInput = sample
-    this.toneHPPrevOutput = highPassed
+    // TS808 fixed post-clip low-pass: 1k + 0.22uF (around 723 Hz).
+    const postLpRc = Math.max(1e-12, POST_CLIP_LP_RESISTANCE * POST_CLIP_LP_CAPACITANCE)
+    const postLpAlpha = dt / (postLpRc + dt)
+    this.preToneLPState += postLpAlpha * (sample - this.preToneLPState)
+    const postFiltered = this.preToneLPState
 
+    // Active tone network pivot: 220R + 0..20k pot with 0.22uF branch (~3.2 kHz turnover near min R).
     let toneResistance = mapToneToResistance(this.tone, this.toneResistanceBase)
     if (this.bypassed.has('ts-tone-resistor')) {
-      toneResistance = mapToneToResistance(this.tone, Math.max(24, this.toneResistanceBase * 0.08))
+      toneResistance = Math.max(24, this.toneResistanceBase * 0.08)
     } else if (this.bypassed.has('ts-tone-pot')) {
-      toneResistance = Math.max(this.toneResistanceBase, 24)
+      toneResistance = this.toneResistanceBase + TONE_POT_SPAN * 0.5
     }
 
-    if (this.bypassed.has('ts-tone-cap')) {
-      this.toneLPState = highPassed
-      return highPassed
-    }
+    const toneCap = this.bypassed.has('ts-tone-cap') ? 1e-12 : this.toneCapacitance
+    const shelfRc = Math.max(1e-12, toneResistance * toneCap)
+    const hpAlpha = shelfRc / (shelfRc + dt)
+    const shelfHigh = hpAlpha * (this.toneHPPrevOutput + postFiltered - this.toneHPPrevInput)
+    this.toneHPPrevInput = postFiltered
+    this.toneHPPrevOutput = shelfHigh
 
-    const lpRc = Math.max(1e-12, toneResistance * this.toneCapacitance)
-    const lpAlpha = dt / (lpRc + dt)
-    this.toneLPState += lpAlpha * (highPassed - this.toneLPState)
+    const toneMix = clamp01(this.tone)
+    // At tone=0, extra high cut; at tone=1, largely neutral (TS bright end is compensation, not huge boost).
+    const shelfDb = -12 * (1 - toneMix)
+    const shelfGain = Math.pow(10, shelfDb / 20) - 1
 
+    this.toneLPState = postFiltered + shelfHigh * shelfGain
     return this.toneLPState
   }
 
@@ -571,7 +578,7 @@ class TubeScreamerWDFGraph {
       this.startupCounter += 1
     }
 
-    const maxDelta = 0.06
+    const maxDelta = 0.18
     const delta = safeOutput - this.prevOutput
     if (delta > maxDelta) safeOutput = this.prevOutput + maxDelta
     else if (delta < -maxDelta) safeOutput = this.prevOutput - maxDelta

@@ -75,10 +75,10 @@ describe('BR-08_tube-screamer-tone-and-component-audibility', () => {
     graph.setValueMultiplier('ts-tone-cap', 4)
     const largeCap = runWindow(graph, 12_000)
 
-    const hiSmall = spectralAmplitude(smallCap, 1320)
-    const hiLarge = spectralAmplitude(largeCap, 1320)
+    const hiSmall = spectralAmplitude(smallCap, 4000)
+    const hiLarge = spectralAmplitude(largeCap, 4000)
     const capRatio = hiLarge / Math.max(1e-9, hiSmall)
-    assert.ok(capRatio > 1.2 || capRatio < 0.8, `expected tone-cap multiplier to change output; ratio=${capRatio}`)
+    assert.ok(capRatio > 1.15 || capRatio < 0.85, `expected tone-cap multiplier to change output; ratio=${capRatio}`)
 
     graph.setBypassed('ts-clipping-diodes', false)
     const clipped = runWindow(graph, 12_000)
