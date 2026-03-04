@@ -58,16 +58,22 @@ describe('BR-08_tube-screamer-tone-and-component-audibility', () => {
     graph.setParameter('tone', 1)
     const bright = runWindow(graph, 16_000)
 
+    const darkLow = spectralAmplitude(dark, 220)
+    const brightLow = spectralAmplitude(bright, 220)
+    const lowRatio = brightLow / Math.max(1e-9, darkLow)
+
     const darkHi = spectralAmplitude(dark, 1320)
     const brightHi = spectralAmplitude(bright, 1320)
-    const ratio = brightHi / Math.max(1e-9, darkHi)
+    const hiRatio = brightHi / Math.max(1e-9, darkHi)
 
-    assert.ok(ratio > 1.2 || ratio < 0.8, `expected tone sweep to materially change high-frequency content; ratio=${ratio}`)
+    // TS808 tone should mostly preserve low fundamentals while tilting upper mids/highs.
+    assert.ok(lowRatio > 0.9 && lowRatio < 1.1, `tone sweep moved lows too much; lowRatio=${lowRatio}`)
+    assert.ok(hiRatio > 1.25 || hiRatio < 0.8, `expected tone sweep to materially change high-frequency content; hiRatio=${hiRatio}`)
     assert.ok(rms(bright) > 0.01, 'expected non-silent output from Tube Screamer graph')
 
     const rmsRatio = rms(bright) / Math.max(1e-9, rms(dark))
-    // Tone should primarily tilt frequency response, not behave like a giant volume boost.
-    assert.ok(rmsRatio < 1.5, `tone sweep changed overall loudness too much; rmsRatio=${rmsRatio}`)
+    // Tone should primarily tilt frequency response, not behave like a volume control.
+    assert.ok(rmsRatio < 1.15, `tone sweep changed overall loudness too much; rmsRatio=${rmsRatio}`)
   })
 
   it('component value and bypass controls materially affect output', async () => {
