@@ -1111,8 +1111,12 @@ class KlonCentaurWDFGraph {
     const hp = hpAlpha * (this.shelfHPPrevOutput + sample - this.shelfHPPrevInput)
     this.shelfHPPrevInput = sample
     this.shelfHPPrevOutput = hp
-    const shelfBoost = 0.12 + this.treble * 1.05
-    return sample + hp * shelfBoost
+
+    // Treble behaves as a proper shelf centered around noon:
+    // < 0.5 cuts highs, > 0.5 boosts highs.
+    const gainDb = (this.treble - 0.5) * 24
+    const shelfGain = Math.pow(10, gainDb / 20) - 1
+    return sample + hp * shelfGain
   }
 
   addLevel(componentId, sample) {
@@ -1227,7 +1231,18 @@ const createGraphFromConfig = (config) => {
   return new TubeScreamerWDFGraph(config)
 }
 
-class WDFProcessor extends AudioWorkletProcessor {
+const WorkletProcessorBase = typeof AudioWorkletProcessor === 'function'
+  ? AudioWorkletProcessor
+  : class {
+      constructor() {
+        this.port = {
+          onmessage: null,
+          postMessage() {},
+        }
+      }
+    }
+
+class WDFProcessor extends WorkletProcessorBase {
   graph = null
   startupSilentBlocks = 24
   perfTotalMs = 0
@@ -1307,4 +1322,10 @@ class WDFProcessor extends AudioWorkletProcessor {
   }
 }
 
-registerProcessor('wdf-processor', WDFProcessor)
+if (typeof registerProcessor === 'function') {
+  registerProcessor('wdf-processor', WDFProcessor)
+}
+
+export const __test = {
+  createGraphFromConfig,
+}
