@@ -427,6 +427,9 @@ class TubeScreamerWDFGraph {
     const diodeVoltageRaw = this.clippingDiodes.getVoltage()
     const sourceVoltage = Number.isFinite(sourceVoltageRaw) ? Math.max(-4, Math.min(4, sourceVoltageRaw)) : 0
     const diodeVoltage = Number.isFinite(diodeVoltageRaw) ? Math.max(-4, Math.min(4, diodeVoltageRaw)) : 0
+    if (this.clippingDiodes.bypass) {
+      return sourceVoltage * 0.95
+    }
     const mixed = sourceVoltage * 0.65 + diodeVoltage * 0.35
     if (!Number.isFinite(mixed)) {
       return Math.tanh(sample * 3.2)
@@ -435,10 +438,6 @@ class TubeScreamerWDFGraph {
   }
 
   processTone(sample) {
-    if (this.bypassed.has('ts-tone-cap') || this.bypassed.has('ts-tone-resistor') || this.bypassed.has('ts-tone-pot')) {
-      return sample
-    }
-
     // PRD topology: 0.1uF highpass roll-off + RC lowpass with 220R + 0-20k tone pot and 0.22uF cap.
     const dt = 1 / this.sampleRateHz
 
@@ -448,8 +447,19 @@ class TubeScreamerWDFGraph {
     this.toneHPPrevInput = sample
     this.toneHPPrevOutput = highPassed
 
-    const toneResistance = mapToneToResistance(this.tone, this.toneResistanceBase)
-    const lpRc = toneResistance * this.toneCapacitance
+    let toneResistance = mapToneToResistance(this.tone, this.toneResistanceBase)
+    if (this.bypassed.has('ts-tone-resistor')) {
+      toneResistance = mapToneToResistance(this.tone, Math.max(24, this.toneResistanceBase * 0.08))
+    } else if (this.bypassed.has('ts-tone-pot')) {
+      toneResistance = Math.max(this.toneResistanceBase, 24)
+    }
+
+    if (this.bypassed.has('ts-tone-cap')) {
+      this.toneLPState = highPassed
+      return highPassed
+    }
+
+    const lpRc = Math.max(1e-12, toneResistance * this.toneCapacitance)
     const lpAlpha = dt / (lpRc + dt)
     this.toneLPState += lpAlpha * (highPassed - this.toneLPState)
 
@@ -507,7 +517,9 @@ class TubeScreamerWDFGraph {
       safeOutput = fallback
     }
 
-    safeOutput = Math.tanh(safeOutput * 1.2)
+    if (Math.abs(safeOutput) > 1.2) {
+      safeOutput = Math.tanh(safeOutput * 0.9)
+    }
 
     if (Math.abs(safeOutput) < 1e-7 && Math.abs(sample) > 1e-5) {
       safeOutput = fallback
