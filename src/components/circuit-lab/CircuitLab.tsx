@@ -151,7 +151,7 @@ export function CircuitLab({ audioEngine, onSelectCircuit }: CircuitLabProps) {
       <ParameterControls circuit={circuit} values={parameters ?? {}} onChange={handleParameterChange} />
 
       {circuit.engine === 'wdf' && topology ? (
-        <div className="topology-stack">
+        <div className={selectedComponentMeta ? 'topology-stack panel-open' : 'topology-stack'}>
           <div className="topology-actions">
             <button type="button" className="reset-all-btn" onClick={handleResetAll}>RESET ALL</button>
           </div>
@@ -166,14 +166,22 @@ export function CircuitLab({ audioEngine, onSelectCircuit }: CircuitLabProps) {
               onSelectComponent={setSelectedWdfComponent}
             />
             {selectedComponentMeta ? (
-              <ComponentInfoPanel
-                component={selectedComponentMeta}
-                bypassed={Boolean(componentBypasses[selectedComponentMeta.id])}
-                multiplier={componentMultipliers[selectedComponentMeta.id] ?? 1}
-                onBypassChange={(next) => handleBypassChange(selectedComponentMeta.id, next)}
-                onMultiplierChange={(next) => handleMultiplierChange(selectedComponentMeta.id, next)}
-                onClose={() => setSelectedWdfComponent(null)}
-              />
+              <>
+                <button
+                  type="button"
+                  className="component-info-scrim"
+                  onClick={() => setSelectedWdfComponent(null)}
+                  aria-label="Close component details"
+                />
+                <ComponentInfoPanel
+                  component={selectedComponentMeta}
+                  bypassed={Boolean(componentBypasses[selectedComponentMeta.id])}
+                  multiplier={componentMultipliers[selectedComponentMeta.id] ?? 1}
+                  onBypassChange={(next) => handleBypassChange(selectedComponentMeta.id, next)}
+                  onMultiplierChange={(next) => handleMultiplierChange(selectedComponentMeta.id, next)}
+                  onClose={() => setSelectedWdfComponent(null)}
+                />
+              </>
             ) : null}
           </div>
         </div>

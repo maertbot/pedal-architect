@@ -52,23 +52,19 @@ function computeParallelResponse(filters: FilterNodeDescriptor[], frequencies: F
   const combined = new Float32Array(numPoints)
 
   const lpMag = createResponseBuffer(numPoints)
-  const lpPhase = createResponseBuffer(numPoints)
   const hpMag = createResponseBuffer(numPoints)
-  const hpPhase = createResponseBuffer(numPoints)
+  const phaseScratch = createResponseBuffer(numPoints)
 
-  lp.node.getFrequencyResponse(frequencies, lpMag, lpPhase)
-  hp.node.getFrequencyResponse(frequencies, hpMag, hpPhase)
+  lp.node.getFrequencyResponse(frequencies, lpMag, phaseScratch)
+  hp.node.getFrequencyResponse(frequencies, hpMag, phaseScratch)
 
-  const lpGain = lp.gainNode?.gain.value ?? 1
-  const hpGain = hp.gainNode?.gain.value ?? 1
+  const lpGain = Math.max(0, lp.gainNode?.gain.value ?? lp.gainNode?.gain.defaultValue ?? 1)
+  const hpGain = Math.max(0, hp.gainNode?.gain.value ?? hp.gainNode?.gain.defaultValue ?? 1)
 
   for (let i = 0; i < numPoints; i += 1) {
-    const lpReal = lpMag[i] * Math.cos(lpPhase[i]) * lpGain
-    const lpImag = lpMag[i] * Math.sin(lpPhase[i]) * lpGain
-    const hpReal = hpMag[i] * Math.cos(hpPhase[i]) * hpGain
-    const hpImag = hpMag[i] * Math.sin(hpPhase[i]) * hpGain
-
-    combined[i] = Math.hypot(lpReal + hpReal, lpImag + hpImag)
+    // The Big Muff tone stack branch blend is visualized as a weighted magnitude mix.
+    // This keeps the expected W-shaped scoop stable across browsers.
+    combined[i] = lpMag[i] * lpGain + hpMag[i] * hpGain
   }
 
   return combined

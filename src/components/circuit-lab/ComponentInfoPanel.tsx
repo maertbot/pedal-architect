@@ -95,6 +95,7 @@ export function ComponentInfoPanel({
 
   return (
     <aside className="component-info-panel open">
+      <div className="panel-drag-handle" aria-hidden="true" />
       <button type="button" className="panel-close-btn" onClick={onClose} aria-label="Close component details">
         ×
       </button>

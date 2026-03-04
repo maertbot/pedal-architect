@@ -359,12 +359,14 @@ select,
   width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }
 
 .topology-svg {
   width: 100%;
-  min-width: 620px;
-  height: 380px;
+  min-width: 780px;
+  height: 440px;
   display: block;
 }
 
@@ -381,7 +383,7 @@ select,
 
 .signal-trace {
   stroke: var(--accent-green);
-  stroke-width: 2;
+  stroke-width: 2.2;
   stroke-dasharray: 8 4;
   animation: signal-flow 0.6s linear infinite;
   filter: drop-shadow(0 0 4px rgba(32, 255, 96, 0.4));
@@ -389,7 +391,7 @@ select,
 
 .topology-connection {
   stroke: rgba(210, 210, 210, 0.55);
-  stroke-width: 1;
+  stroke-width: 1.15;
   fill: none;
 }
 
@@ -404,8 +406,8 @@ select,
 
 .stage-label {
   fill: #6f6f6f;
-  font-size: 10px;
-  letter-spacing: 0.14em;
+  font-size: 11px;
+  letter-spacing: 0.16em;
 }
 
 .topology-component {
@@ -441,13 +443,14 @@ select,
 
 .component-label {
   fill: #d6d6d6;
-  font-size: 9px;
+  font-size: 8.5px;
   letter-spacing: 0.02em;
+  dominant-baseline: hanging;
 }
 
 .component-value {
   fill: var(--accent-amber);
-  font-size: 8px;
+  font-size: 7.8px;
 }
 
 .signal-meter {
@@ -462,7 +465,7 @@ select,
 
 .multiplier-label {
   fill: var(--accent-amber);
-  font-size: 8px;
+  font-size: 7.8px;
 }
 
 .component-info-panel {
@@ -479,13 +482,17 @@ select,
   pointer-events: none;
   transition: transform 0.2s ease-out, opacity 0.2s ease-out;
   overflow-y: auto;
-  z-index: 5;
+  z-index: 60;
 }
 
 .component-info-panel.open {
   transform: translateX(0);
   opacity: 1;
   pointer-events: auto;
+}
+
+.component-info-scrim {
+  display: none;
 }
 
 .panel-close-btn {
@@ -500,6 +507,10 @@ select,
   line-height: 18px;
   font-size: 16px;
   cursor: pointer;
+}
+
+.panel-drag-handle {
+  display: none;
 }
 
 .component-header {
@@ -836,7 +847,23 @@ select,
   }
 
   .topology-svg {
-    min-width: 620px;
+    min-width: 780px;
+  }
+
+  .topology-stack.panel-open {
+    padding-bottom: 52vh;
+  }
+
+  .component-info-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    border: 0;
+    margin: 0;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.48);
+    z-index: 55;
+    cursor: pointer;
   }
 
   .component-info-panel {
@@ -848,9 +875,33 @@ select,
     border-left: none;
     border-top: 3px solid var(--accent-amber);
     transform: translateY(100%);
+    z-index: 60;
+    padding-top: 30px;
   }
 
   .component-info-panel.open {
     transform: translateY(0);
+  }
+
+  .panel-drag-handle {
+    display: block;
+    position: absolute;
+    left: 50%;
+    top: 8px;
+    width: 46px;
+    height: 5px;
+    border-radius: 999px;
+    transform: translateX(-50%);
+    background: rgba(220, 220, 220, 0.45);
+    pointer-events: none;
+  }
+
+  .panel-close-btn {
+    width: 44px;
+    height: 44px;
+    right: 6px;
+    top: 2px;
+    line-height: 38px;
+    font-size: 22px;
   }
 }

@@ -20,7 +20,7 @@
 
 ## Gotchas
 - Fuzz Face intentionally has no tone-stack analytical curve; showing a forced synthetic curve is misleading. Keep the “No tone control” mode + live spectrum.
-- Frequency-response math must combine parallel paths in the complex domain (real/imag), not by naive magnitude averaging or multiplying.
+- Big Muff tone-stack visualization is more stable with a gain-weighted LP/HP magnitude blend before the series mid-notch; phase-coherent summing can over-cancel and hide the expected scoop depending on browser filter phase behavior.
 - Recomputing arrays each animation frame is acceptable here, but if more panels are added, buffer reuse should be prioritized to avoid avoidable GC churn.
 - The panel depends on AudioEngine initialization for live node handles; before engine init there are no circuit filter nodes to inspect.
 
@@ -138,3 +138,78 @@
 - Result: all npm package registry endpoints returned `200`.
 - Ran `curl -sIL` for unique external URLs discovered in `README.md`, `docs/`, `src/`, `index.html`, and `DEV-NOTES.md`.
 - Result: all checked URLs returned `200` except `http://www.muzique.com/lab/ts.htm` which returned `404`.
+
+## 2026-03-04 — Topology Spacing + WDF Audible Control Recovery
+
+### What Worked
+- Expanding topology geometry to `780x440` and redistributing nodes by stage removed most collision pressure in the clipping loop and output area.
+- Wrapping long component labels into two lines in `ComponentNode.tsx` stabilized text layout without abbreviating engineering names.
+- Keeping all audible behavior inside `WDFProcessor.js` (instead of relying on disconnected Biquad nodes) keeps UI controls and component controls aligned with the actual DSP path.
+- Adjusting tone bypass handling to be component-specific (instead of bypassing all tone processing when any tone component is bypassed) restored audible control sensitivity.
+
+### What Broke / Fixes Applied
+- The processor had a final unconditional `tanh` saturation pass, which masked differences from diode bypass and tone/component changes. Fix: only apply protective soft limiting when output magnitude exceeds a safety threshold.
+- Tone processing previously short-circuited entirely when any tone component (`ts-tone-cap`, `ts-tone-resistor`, `ts-tone-pot`) was bypassed. Fix: model each bypass path independently:
+  - `ts-tone-cap` bypass now skips the lowpass capacitor branch only.
+  - `ts-tone-resistor` and `ts-tone-pot` bypass now alter effective resistance rather than nuking the whole tone stage.
+- The clipping diode bypass path was not distinct enough in output character. Fix: explicit linearized output branch when diodes are bypassed.
+
+### What Was Surprising
+- The biggest “no audible change” factor was not message transport; `param`/`bypass`/`valueMultiplier` messaging was already wired correctly.
+- Small post-DSP utility nonlinearities can hide meaningful control differences more than expected in low-latency pedal models.
+- Label overlap pressure was mostly from text width, not symbol size; adding horizontal spacing alone was insufficient without label wrapping.
+
+### Gotchas
+- Frequency-response visualization nodes (`getFilterNodes`) can remain useful while being disconnected from audio, but this must stay clearly documented to avoid false debugging trails.
+- If topology values or label formats change, re-check 375px viewport behavior; horizontal scroll is intentional and required for readability.
+- Keep tone-stage bypass semantics physically plausible; an “all-or-nothing” bypass gate can make multiple controls appear broken at once.
+
+### Maintenance / Extension Guide
+- Topology layout source of truth is `src/audio/wdf/topology.ts`; rendering behavior lives in `src/components/circuit-lab/CircuitTopology.tsx` and `ComponentNode.tsx`.
+- If adding components, budget horizontal spacing for three text lines (`name`, `realWorldValue`, `multiplier`) and update stage boundaries accordingly.
+- WDF audible control logic should stay centralized in `src/audio/wdf/WDFProcessor.js`; UI/runtime files should only send control messages.
+- When introducing new bypassable DSP blocks, avoid global bypass short-circuits and instead define per-component bypass effects.
+- Regression check list for future WDF edits:
+  - Diode bypass audibly reduces distortion.
+  - Input cap multiplier shifts low-end.
+  - Feedback cap multiplier changes clipping character.
+  - Tone cap multiplier changes brightness.
+  - Drive/Tone/Level knobs audibly and visibly affect output.
+
+### Dependency Verification (2026-03-04)
+- Verified all `dependencies` and `devDependencies` from `package.json` via `npm view <package> version`.
+- Result: all package names resolved successfully; no missing packages.
+
+## 2026-03-04 — Big Muff Mid-Scoop + Mobile Info Panel Polish
+
+### What Worked
+- Updating `computeParallelResponse` to sum LP/HP branch magnitudes using their current gain-node values restored a consistent Big Muff mid-scoop visualization at default tone.
+- Keeping the mid-notch as a series multiplier after the LP/HP blend preserved the expected notch center behavior around ~900-1000Hz.
+- Mobile bottom-sheet polish was straightforward with a fixed scrim layer plus stronger panel z-index and a dedicated drag handle.
+
+### What Broke / Fixes Applied
+- Existing parallel-path complex summing could visually collapse into a tilted/lowpass-looking curve in some runs, preventing the expected Big Muff “MID SCOOP” annotation. Fix: switch visual blend to gain-weighted LP/HP magnitude summing, then apply series filters.
+- The mobile component info panel lacked visual separation from underlying content and had a small close target. Fix: add a backdrop scrim, increase panel z-index, and expand close button hit area to `44x44`.
+
+### What Was Surprising
+- The Big Muff curve shape was more sensitive to summing method than to notch depth; the same filter settings produced much clearer W-shape behavior once LP/HP blend semantics changed.
+- `overflow-x: auto` was already present for topology; adding touch scrolling behavior and scrim/padding logic solved most perceived mobile crowding without changing node geometry.
+
+### Gotchas
+- `getFilterNodes()` returns live `AudioNode` handles; visualization behavior can change with browser-specific phase implementation details even when parameters match.
+- A fixed mobile bottom-sheet should include either content offset (`padding-bottom`) or a hard interaction lock with scrim; otherwise underlying controls can appear obscured or partially reachable.
+
+### Mobile/Responsive Check (375px)
+- CSS logic confirms horizontal topology scrolling remains enabled (`.topology-scroll` keeps `overflow-x: auto`, touch scrolling enabled, SVG `min-width: 780px`).
+- When the info panel is open on mobile: scrim (`z-index: 55`) covers background, sheet (`z-index: 60`) sits above all content, and close button meets tap-target sizing (`44x44`).
+- Added `padding-bottom: 52vh` on `.topology-stack.panel-open` so underlying sections are not trapped beneath the fixed sheet during page scroll.
+- Bottom-sheet retains `max-height: 50vh` and `overflow-y: auto`, so panel content remains reachable.
+
+### How To Extend
+- If more circuits adopt parallel tone stacks, consider adding an explicit `blendMode` field on `FilterNodeDescriptor` (`magnitude-sum` vs `complex-sum`) instead of relying on one global strategy.
+- Add a lightweight response regression script that asserts Big Muff center-tone notch depth (`minDb < -6`) to protect the “MID SCOOP” annotation behavior.
+- For richer mobile UX, wire the drag handle to pointer gestures and snap states (`peek`, `half`, `closed`) while keeping close-button access.
+
+### Dependency Verification (2026-03-04, This Change)
+- Ran `curl -sI https://registry.npmjs.org/<package>` for every package in `dependencies` and `devDependencies`.
+- Result: all package registry URLs returned HTTP `200` (no 404s).
