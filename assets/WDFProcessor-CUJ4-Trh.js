@@ -264,6 +264,9 @@ class TubeScreamerWDFGraph {
   drive = 0.5
   tone = 0.5
   level = 0.8
+  driveTarget = 0.5
+  toneTarget = 0.5
+  levelTarget = 0.8
   bypassed = new Set()
   hpPrevInput = 0
   hpPrevOutput = 0
@@ -284,9 +287,14 @@ class TubeScreamerWDFGraph {
     this.clippingParallel = new ParallelAdaptor(this.clippingDiodes, this.feedbackSeries)
     this.clippingRoot = new SeriesAdaptor(this.inputResistor, this.clippingParallel)
 
-    this.setParameter('drive', config.drive)
-    this.setParameter('tone', config.tone)
-    this.setParameter('level', config.level)
+    this.drive = clamp01(config.drive)
+    this.tone = clamp01(config.tone)
+    this.level = config.level
+    this.driveTarget = this.drive
+    this.toneTarget = this.tone
+    this.levelTarget = this.level
+
+    this.driveResistor.setParam(mapDriveToResistance(this.drive))
     this.refreshNetworkResistances()
   }
 
@@ -297,19 +305,17 @@ class TubeScreamerWDFGraph {
 
   setParameter(paramId, value) {
     if (paramId === 'drive') {
-      this.drive = clamp01(value)
-      this.driveResistor.setParam(mapDriveToResistance(this.drive))
-      this.refreshNetworkResistances()
+      this.driveTarget = clamp01(value)
       return
     }
 
     if (paramId === 'tone') {
-      this.tone = clamp01(value)
+      this.toneTarget = clamp01(value)
       return
     }
 
     if (paramId === 'level') {
-      this.level = value
+      this.levelTarget = value
     }
   }
 
@@ -318,6 +324,17 @@ class TubeScreamerWDFGraph {
     this.clippingParallel.refreshPortResistance()
     this.clippingRoot.refreshPortResistance()
     this.clippingDiodes.setPortResistance(this.clippingParallel.portResistance)
+  }
+
+  updateSmoothedParams() {
+    const coeff = 0.01
+
+    this.drive += (this.driveTarget - this.drive) * coeff
+    this.tone += (this.toneTarget - this.tone) * coeff
+    this.level += (this.levelTarget - this.level) * coeff
+
+    this.driveResistor.setParam(mapDriveToResistance(this.drive))
+    this.refreshNetworkResistances()
   }
 
   processInputCoupling(sample) {
@@ -366,6 +383,8 @@ class TubeScreamerWDFGraph {
   }
 
   processSample(sample) {
+    this.updateSmoothedParams()
+
     const fallbackBase = Math.tanh(sample * (1 + this.drive * 6))
     const fallback = this.bypassed.has('ts-volume') ? fallbackBase : fallbackBase * this.level
 
