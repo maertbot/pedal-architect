@@ -1,0 +1,105 @@
+name: Bug report
+description: Report a product bug with reproducible steps and expected behavior.
+title: "bug: <short summary>"
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. Please include concrete repro details so we can write a failing test first.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One-line bug description.
+      placeholder: Tone knob changes graph but not audible tone in Circuit Lab.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Circuit Lab
+        - Learn Mode
+        - Audio Engine / DSP
+        - Topology UI
+        - Build / Tooling
+    validations:
+      required: true
+
+  - type: input
+    id: circuit
+    attributes:
+      label: Circuit(s)
+      description: Which circuit IDs/names are affected?
+      placeholder: klon-centaur-wdf, tube-screamer-wdf
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should happen according to product intent/PRD?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Deterministic steps we can automate in a test.
+      placeholder: |
+        1) Open Circuit Lab
+        2) Select klon-centaur-wdf
+        3) Start audio
+        4) Toggle Clean Path bypass
+        5) Observe no audible change
+    validations:
+      required: true
+
+  - type: input
+    id: prd_ref
+    attributes:
+      label: PRD reference (section)
+      description: Link file + section that defines intended behavior.
+      placeholder: docs/PRD-wdf-learn-mode.md - Phase 2 (Interactive topology + bypass controls)
+    validations:
+      required: true
+
+  - type: textarea
+    id: test_hint
+    attributes:
+      label: Test hint (optional)
+      description: Suggested failing test level/path if you have one.
+      placeholder: Unit: tests/wdf/runtimeControls.test.ts, assert bypass message posted.
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Console logs, screenshots, waveform captures, or short clips.
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - Critical (core feature broken)
+        - High
+        - Medium
+        - Low
+    validations:
+      required: true

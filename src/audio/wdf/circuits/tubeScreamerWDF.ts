@@ -219,6 +219,16 @@ export const tubeScreamerWDF: CircuitModel = {
           midShape.gain.value = 1.5 + clamp01(value) * 3
         }
       },
+      bypassComponent: (componentId, bypassed) => {
+        node.bypassComponent(componentId, bypassed)
+      },
+      setComponentValueMultiplier: (componentId, multiplier) => {
+        node.setComponentValueMultiplier(componentId, multiplier)
+      },
+      getComponentLevels: () => node.getComponentLevels(),
+      onLevels: (callback) => {
+        node.onLevels(callback)
+      },
       getFilterNodes: () => filterNodes,
       destroy: () => {
         node.disconnect()

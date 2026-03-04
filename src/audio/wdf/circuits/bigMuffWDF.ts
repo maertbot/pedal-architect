@@ -282,6 +282,16 @@ export const bigMuffWDF: CircuitModel = {
         node.setParameter(paramId, value)
         if (paramId === 'tone') setTone(value)
       },
+      bypassComponent: (componentId, bypassed) => {
+        node.bypassComponent(componentId, bypassed)
+      },
+      setComponentValueMultiplier: (componentId, multiplier) => {
+        node.setComponentValueMultiplier(componentId, multiplier)
+      },
+      getComponentLevels: () => node.getComponentLevels(),
+      onLevels: (callback) => {
+        node.onLevels(callback)
+      },
       getFilterNodes: () => filterNodes,
       destroy: () => {
         node.disconnect()

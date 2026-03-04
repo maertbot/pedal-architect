@@ -9,5 +9,5 @@
     "skipLibCheck": true,
     "outDir": ".test-dist"
   },
-  "include": ["tests/**/*.ts", "src/audio/syncCircuitSelection.ts"]
+  "include": ["tests/**/*.ts", "src/audio/syncCircuitSelection.ts", "src/audio/wdf/**/*.ts", "src/audio/types.ts"]
 }

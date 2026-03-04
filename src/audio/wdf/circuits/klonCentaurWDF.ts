@@ -183,6 +183,16 @@ export const klonCentaurWDF: CircuitModel = {
           treble.gain.value = 1.5 + clamp01(value) * 5.5
         }
       },
+      bypassComponent: (componentId, bypassed) => {
+        node.bypassComponent(componentId, bypassed)
+      },
+      setComponentValueMultiplier: (componentId, multiplier) => {
+        node.setComponentValueMultiplier(componentId, multiplier)
+      },
+      getComponentLevels: () => node.getComponentLevels(),
+      onLevels: (callback) => {
+        node.onLevels(callback)
+      },
       getFilterNodes: () => filterNodes,
       destroy: () => {
         node.disconnect()
