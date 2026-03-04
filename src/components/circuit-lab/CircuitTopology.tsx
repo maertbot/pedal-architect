@@ -142,13 +142,12 @@ export function CircuitTopology({
           onClick={() => onSelectComponent(null)}
         >
           <line x1={topology.signalInputX} y1={TRACE_Y} x2={topology.signalOutputX} y2={TRACE_Y} className="topology-baseline" />
-          <line x1={topology.signalInputX} y1={TRACE_Y} x2={topology.signalOutputX} y2={TRACE_Y} className="signal-trace" />
 
           {topology.connections.map((connection) => (
             <path
               key={`${connection.from}-${connection.to}`}
               d={buildConnectionPath(connection, topology.nodes, componentMap, topology.signalInputX, topology.signalOutputX)}
-              className="topology-connection"
+              className="topology-connection signal-flow-path"
             />
           ))}
 

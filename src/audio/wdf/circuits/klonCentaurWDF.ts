@@ -167,7 +167,7 @@ export const klonCentaurWDF: CircuitModel = {
     })
 
     const hasBiquad = typeof globalThis.BiquadFilterNode !== 'undefined'
-    const treble = hasBiquad ? new BiquadFilterNode(ctx, { type: 'highshelf', frequency: trebleToFrequency(0.5), gain: 4 }) : null
+    const treble = hasBiquad ? new BiquadFilterNode(ctx, { type: 'highshelf', frequency: trebleToFrequency(0.5), gain: 0 }) : null
 
     const filterNodes: FilterNodeDescriptor[] = treble
       ? [{ node: treble, topology: 'series', label: 'Treble Shelf', paramId: 'treble' }]
@@ -179,8 +179,9 @@ export const klonCentaurWDF: CircuitModel = {
       setParameter: (paramId, value) => {
         node.setParameter(paramId, value)
         if (paramId === 'treble' && treble) {
-          treble.frequency.value = trebleToFrequency(value)
-          treble.gain.value = 1.5 + clamp01(value) * 5.5
+          const normalized = clamp01(value)
+          treble.frequency.value = trebleToFrequency(normalized)
+          treble.gain.value = (normalized - 0.5) * 24
         }
       },
       bypassComponent: (componentId, bypassed) => {

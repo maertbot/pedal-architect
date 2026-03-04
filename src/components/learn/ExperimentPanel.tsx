@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { WDFComponentMeta } from '../../audio/wdf/types'
 import type { LearnStep } from '../../data/learn/types'
+import { isSelectionActive } from './valueSelection'
 
 interface ExperimentPanelProps {
   step: LearnStep
@@ -10,6 +11,7 @@ interface ExperimentPanelProps {
   onToggleBypass: (componentId: string) => void
   onSetMultiplier: (componentId: string, multiplier: number) => void
   onSetKnob: (paramId: string, value: number) => void
+  currentKnobValue?: number
 }
 
 function nearestStep(value: number, steps: number[]): number {
@@ -25,6 +27,7 @@ export function ExperimentPanel({
   onToggleBypass,
   onSetMultiplier,
   onSetKnob,
+  currentKnobValue,
 }: ExperimentPanelProps) {
   const experiment = step.experiment
   const valueRange = component?.valueRange
@@ -72,7 +75,7 @@ export function ExperimentPanel({
               <button
                 key={value}
                 type="button"
-                className={Math.abs(currentMultiplier - value) < 1e-6 ? 'step-btn active' : 'step-btn'}
+                className={isSelectionActive(currentMultiplier, value) ? 'step-btn active' : 'step-btn'}
                 onClick={() => onSetMultiplier(experiment.targetComponent!, value)}
               >
                 {value}x
@@ -85,7 +88,7 @@ export function ExperimentPanel({
       {experiment.type === 'knob' && experiment.paramId ? (
         <div className="learn-knob-values">
           {(experiment.paramValues ?? []).map((value) => (
-            <button key={value} type="button" className="step-btn" onClick={() => onSetKnob(experiment.paramId!, value)}>
+            <button key={value} type="button" className={isSelectionActive(currentKnobValue ?? value, value) ? 'step-btn active' : 'step-btn'} onClick={() => onSetKnob(experiment.paramId!, value)}>
               {value}
             </button>
           ))}

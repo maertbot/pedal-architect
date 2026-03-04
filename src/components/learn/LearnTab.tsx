@@ -114,11 +114,12 @@ export function LearnTab({ audioEngine }: LearnTabProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lesson, safeStepIndex])
 
-  const startLesson = async (circuitId: string) => {
+  const startLesson = (circuitId: string) => {
+    // Explicit-play rule: entering Learn mode should not auto-start audio.
+    audioEngine.stop()
     setLearnCircuit(circuitId)
     setCircuit(circuitId)
     syncCircuitSelection(audioEngine, circuitId, parameters)
-    await audioEngine.start()
   }
 
   const exitLesson = () => {
@@ -192,6 +193,7 @@ export function LearnTab({ audioEngine }: LearnTabProps) {
           component={experimentComponent}
           currentBypassed={Boolean(currentStep?.experiment?.targetComponent && componentBypasses[currentStep.experiment.targetComponent])}
           currentMultiplier={currentStep?.experiment?.targetComponent ? (componentMultipliers[currentStep.experiment.targetComponent] ?? 1) : 1}
+          currentKnobValue={currentStep?.experiment?.paramId ? parameters[learnCircuitId ?? currentCircuit]?.[currentStep.experiment.paramId] : undefined}
           onToggleBypass={handleToggleBypass}
           onSetMultiplier={handleSetMultiplier}
           onSetKnob={handleSetKnob}

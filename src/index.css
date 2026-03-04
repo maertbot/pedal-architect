@@ -395,18 +395,18 @@ select,
   }
 }
 
-.signal-trace {
-  stroke: var(--accent-green);
-  stroke-width: 2.2;
-  stroke-dasharray: 8 4;
-  animation: signal-flow 0.6s linear infinite;
-  filter: drop-shadow(0 0 4px rgba(32, 255, 96, 0.4));
-}
-
 .topology-connection {
   stroke: rgba(210, 210, 210, 0.55);
   stroke-width: 1.15;
   fill: none;
+}
+
+.signal-flow-path {
+  stroke: rgba(32, 255, 96, 0.82);
+  stroke-width: 2;
+  stroke-dasharray: 9 7;
+  animation: signal-flow 0.7s linear infinite;
+  filter: drop-shadow(0 0 3px rgba(32, 255, 96, 0.35));
 }
 
 .topology-ground {
@@ -419,9 +419,9 @@ select,
 }
 
 .stage-label {
-  fill: #6f6f6f;
-  font-size: 11px;
-  letter-spacing: 0.16em;
+  fill: #9b9b9b;
+  font-size: 12px;
+  letter-spacing: 0.14em;
 }
 
 .topology-component {
@@ -477,15 +477,22 @@ select,
 }
 
 .component-label {
-  fill: #d6d6d6;
-  font-size: 8.5px;
+  fill: #ececec;
+  font-size: 10px;
+  font-weight: 600;
   letter-spacing: 0.02em;
   dominant-baseline: hanging;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.7);
+  stroke-width: 1.2px;
 }
 
 .component-value {
   fill: var(--accent-amber);
-  font-size: 7.8px;
+  font-size: 9px;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.6);
+  stroke-width: 1px;
 }
 
 .signal-meter {
