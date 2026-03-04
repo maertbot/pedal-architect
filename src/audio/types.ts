@@ -31,6 +31,10 @@ export interface CircuitRuntime {
   input: AudioNode
   output: AudioNode
   setParameter: (paramId: string, value: number) => void
+  bypassComponent?: (componentId: string, bypassed: boolean) => void
+  setComponentValueMultiplier?: (componentId: string, multiplier: number) => void
+  getComponentLevels?: () => Record<string, number>
+  onLevels?: (callback: (levels: Record<string, number>) => void) => void
   destroy?: () => void
   getFilterNodes?: () => FilterNodeDescriptor[]
   getPhaserConfig?: () => PhaserConfig

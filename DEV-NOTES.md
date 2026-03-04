@@ -99,3 +99,42 @@
 ### Dependency Verification (Phase 1)
 - Ran `curl -sI` against every npm package URL (`https://registry.npmjs.org/<name>`) from `dependencies` and `devDependencies` in `package.json`.
 - Result: all checked package URLs returned HTTP `200`.
+
+## 2026-03-03 — Phase 2 Interactive Topology + Bypass + Value Multipliers
+
+### What Worked
+- Splitting topology into `topology.ts` (layout data), `CircuitTopology.tsx` (wiring), and `ComponentNode.tsx` (symbol rendering) kept layout concerns isolated and made the SVG easier to maintain.
+- Extending the WDF protocol with `valueMultiplier` and `levels` messages enabled two-way UI/worklet interaction without touching legacy circuit paths.
+- RMS aggregation in the worklet at `2940` samples/report (`~15fps @ 44.1kHz`) produced stable component meter values with low messaging overhead.
+- Keeping WDF bypass/multiplier/selection state in Zustand but outside persisted state avoided stale experiment settings across sessions.
+
+### What Broke / Fixes Applied
+- ESLint `react-hooks/refs` blocked reading `levelsRef.current` directly in JSX render. Fix: keep real-time values in a ref and publish a throttled snapshot for render updates.
+- Dependency-check command initially failed for scoped npm packages. Fix: URL-encode package names with `encodeURIComponent()` before `curl`.
+- One shell URL extraction pattern failed due regex parsing. Fix: switched to `rg --no-filename` URL extraction and unique sorting.
+
+### What Was Surprising
+- Most topology complexity was connection routing between series/shunt/feedback branches, not symbol rendering.
+- Value multipliers were easiest to apply by scaling base constants and calling `setParam(...)` on affected WDF elements rather than rebuilding the graph.
+
+### Gotchas
+- `WDFWorkletNode.onLevels()` currently only adds callbacks and has no unsubscribe helper; avoid repeatedly attaching listeners in effects.
+- Scaled-value readout parsing depends on numeric `realWorldValue` strings (e.g. `0.047µF`, `4.7kΩ`); free-text values intentionally fall back.
+- `http://www.muzique.com/lab/ts.htm` now returns `404` during dependency/source verification.
+- Keep topology UI gated behind `circuit.engine === 'wdf'` so legacy circuits remain on the existing block diagram.
+
+### Mobile/Responsive Check
+- Topology section allows horizontal scroll on mobile via `.topology-scroll` with fixed SVG minimum width for readability.
+- Component info panel switches to bottom-sheet mode below `768px` (`position: fixed`, `max-height: 50vh`).
+- Existing oscilloscope and frequency-response mobile sizing remains unchanged and still applies correctly.
+
+### How To Extend
+- Add explicit unsubscribe support to `WDFWorkletNode.onLevels()` if multiple UI consumers are introduced.
+- Add per-component bypass safety guardrails by mapping `bypassMode` to richer UI warnings.
+- Generalize `getTopology(circuitId)` to support additional WDF circuit layouts beyond Tube Screamer.
+
+### Dependency Verification (Phase 2)
+- Ran `curl -sIL` for every package in `dependencies` and `devDependencies` against `https://registry.npmjs.org/<encoded-package>`.
+- Result: all npm package registry endpoints returned `200`.
+- Ran `curl -sIL` for unique external URLs discovered in `README.md`, `docs/`, `src/`, `index.html`, and `DEV-NOTES.md`.
+- Result: all checked URLs returned `200` except `http://www.muzique.com/lab/ts.htm` which returned `404`.

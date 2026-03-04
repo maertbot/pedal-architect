@@ -17,6 +17,9 @@ interface AppState {
   selectedComponentId: string | null
   activeTab: AppTab
   highlightedBlock: string | null
+  componentBypasses: Record<string, boolean>
+  componentMultipliers: Record<string, number>
+  selectedWdfComponent: string | null
   setCircuit: (circuitId: string) => void
   setParameter: (circuitId: string, parameterId: string, value: number) => void
   resetCurrentCircuitParameters: () => void
@@ -30,6 +33,10 @@ interface AppState {
   setSelectedComponentId: (id: string | null) => void
   setActiveTab: (tab: AppTab) => void
   setHighlightedBlock: (blockId: string | null) => void
+  setComponentBypass: (componentId: string, bypassed: boolean) => void
+  setComponentMultiplier: (componentId: string, multiplier: number) => void
+  resetAllWdfComponents: () => void
+  setSelectedWdfComponent: (componentId: string | null) => void
 }
 
 const circuitDefaults = Object.fromEntries(CIRCUITS.map((circuit) => [circuit.id, getCircuitDefaults(circuit.id)]))
@@ -46,9 +53,12 @@ export const useStore = create<AppState>()(
       selectedComponentId: null,
       activeTab: 'circuit',
       highlightedBlock: null,
+      componentBypasses: {},
+      componentMultipliers: {},
+      selectedWdfComponent: null,
       setCircuit: (circuitId) => {
         if (!circuitDefaults[circuitId]) return
-        set({ currentCircuit: circuitId, highlightedBlock: null })
+        set({ currentCircuit: circuitId, highlightedBlock: null, selectedWdfComponent: null })
       },
       setParameter: (circuitId, parameterId, value) => {
         set((state) => ({
@@ -105,6 +115,24 @@ export const useStore = create<AppState>()(
       setSelectedComponentId: (id) => set({ selectedComponentId: id }),
       setActiveTab: (tab) => set({ activeTab: tab }),
       setHighlightedBlock: (blockId) => set({ highlightedBlock: blockId }),
+      setComponentBypass: (componentId, bypassed) => {
+        set((state) => ({
+          componentBypasses: {
+            ...state.componentBypasses,
+            [componentId]: bypassed,
+          },
+        }))
+      },
+      setComponentMultiplier: (componentId, multiplier) => {
+        set((state) => ({
+          componentMultipliers: {
+            ...state.componentMultipliers,
+            [componentId]: multiplier,
+          },
+        }))
+      },
+      resetAllWdfComponents: () => set({ componentBypasses: {}, componentMultipliers: {}, selectedWdfComponent: null }),
+      setSelectedWdfComponent: (componentId) => set({ selectedWdfComponent: componentId }),
     }),
     {
       name: 'pedal-architect-store-v1',

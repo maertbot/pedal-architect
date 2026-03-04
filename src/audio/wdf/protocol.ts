@@ -23,4 +23,15 @@ export type WDFBypassMessage = {
   bypassed: boolean
 }
 
-export type WDFMessage = WDFSetupMessage | WDFParamMessage | WDFBypassMessage
+export type WDFValueMultiplierMessage = {
+  type: 'valueMultiplier'
+  componentId: string
+  multiplier: number
+}
+
+export type WDFLevelsMessage = {
+  type: 'levels'
+  levels: Record<string, number>
+}
+
+export type WDFMessage = WDFSetupMessage | WDFParamMessage | WDFBypassMessage | WDFValueMultiplierMessage

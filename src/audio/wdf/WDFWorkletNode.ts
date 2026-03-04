@@ -1,6 +1,17 @@
-import type { TubeScreamerWDFConfig, WDFBypassMessage, WDFParamMessage, WDFSetupMessage } from './protocol.js'
+import type {
+  TubeScreamerWDFConfig,
+  WDFBypassMessage,
+  WDFLevelsMessage,
+  WDFParamMessage,
+  WDFSetupMessage,
+  WDFValueMultiplierMessage,
+} from './protocol.js'
 
 export class WDFWorkletNode extends AudioWorkletNode {
+  private levels: Record<string, number> = {}
+
+  private levelsCallbacks = new Set<(levels: Record<string, number>) => void>()
+
   constructor(context: AudioContext, config: TubeScreamerWDFConfig) {
     super(context, 'wdf-processor', {
       numberOfInputs: 1,
@@ -14,6 +25,12 @@ export class WDFWorkletNode extends AudioWorkletNode {
       config,
     }
     this.port.postMessage(setup)
+
+    this.port.onmessage = (event: MessageEvent<WDFLevelsMessage>) => {
+      if (event.data?.type !== 'levels') return
+      this.levels = event.data.levels
+      this.levelsCallbacks.forEach((callback) => callback(this.levels))
+    }
   }
 
   static async create(context: AudioContext, config: TubeScreamerWDFConfig): Promise<WDFWorkletNode> {
@@ -38,5 +55,22 @@ export class WDFWorkletNode extends AudioWorkletNode {
       bypassed,
     }
     this.port.postMessage(message)
+  }
+
+  setComponentValueMultiplier(componentId: string, multiplier: number): void {
+    const message: WDFValueMultiplierMessage = {
+      type: 'valueMultiplier',
+      componentId,
+      multiplier,
+    }
+    this.port.postMessage(message)
+  }
+
+  onLevels(callback: (levels: Record<string, number>) => void): void {
+    this.levelsCallbacks.add(callback)
+  }
+
+  getComponentLevels(): Record<string, number> {
+    return this.levels
   }
 }

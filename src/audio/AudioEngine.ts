@@ -169,6 +169,22 @@ export class AudioEngine {
     return this.currentCircuitId
   }
 
+  bypassWdfComponent(componentId: string, bypassed: boolean): void {
+    this.circuitRuntime?.bypassComponent?.(componentId, bypassed)
+  }
+
+  setWdfComponentMultiplier(componentId: string, multiplier: number): void {
+    this.circuitRuntime?.setComponentValueMultiplier?.(componentId, multiplier)
+  }
+
+  getWdfComponentLevels(): Record<string, number> {
+    return this.circuitRuntime?.getComponentLevels?.() ?? {}
+  }
+
+  onWdfLevels(callback: (levels: Record<string, number>) => void): void {
+    this.circuitRuntime?.onLevels?.(callback)
+  }
+
   private createSyntheticLoop(preset: SamplePreset): AudioBuffer {
     if (!this.context) {
       throw new Error('AudioContext is not initialized')

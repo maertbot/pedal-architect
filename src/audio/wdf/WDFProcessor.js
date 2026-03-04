@@ -24,11 +24,18 @@ class Resistor {
 
 class Capacitor {
   constructor(capacitanceFarads, sampleRateHz) {
+    this.sampleRateHz = sampleRateHz
+    this.capacitanceFarads = capacitanceFarads
     this.portResistance = 1 / (2 * capacitanceFarads * sampleRateHz)
     this.incident = 0
     this.reflected = 0
     this.bypass = false
     this.previousIncident = 0
+  }
+
+  setParam(value) {
+    this.capacitanceFarads = Math.max(value, 1e-12)
+    this.portResistance = 1 / (2 * this.capacitanceFarads * this.sampleRateHz)
   }
 
   accept(wave) {
@@ -243,6 +250,18 @@ const TONE_POT_SPAN = 20_000
 const TONE_CAPACITANCE = 0.22e-6
 const TONE_HIGHPASS_CAPACITANCE = 0.1e-6
 const TONE_HIGHPASS_RESISTANCE = 10_000
+const LEVEL_REPORT_INTERVAL_SAMPLES = 2_940
+const COMPONENT_IDS = [
+  'ts-input-cap',
+  'ts-input-resistor',
+  'ts-clipping-diodes',
+  'ts-drive-pot',
+  'ts-feedback-cap',
+  'ts-tone-resistor',
+  'ts-tone-cap',
+  'ts-tone-pot',
+  'ts-volume',
+]
 
 const clamp01 = (value) => {
   if (value < 0) return 0
@@ -255,10 +274,10 @@ const mapDriveToResistance = (driveNormalized) => {
   return DRIVE_MIN_RESISTANCE + (1 - normalized) * DRIVE_SPAN_RESISTANCE
 }
 
-const mapToneToResistance = (toneNormalized) => {
+const mapToneToResistance = (toneNormalized, resistanceBase = TONE_RESISTANCE_BASE) => {
   // Tone up should sound brighter on a TS-style control.
   const t = clamp01(toneNormalized)
-  return TONE_RESISTANCE_BASE + (1 - t) * TONE_POT_SPAN
+  return resistanceBase + (1 - t) * TONE_POT_SPAN
 }
 
 class TubeScreamerWDFGraph {
@@ -277,6 +296,16 @@ class TubeScreamerWDFGraph {
   toneHPPrevInput = 0
   toneHPPrevOutput = 0
   toneLPState = 0
+  valueMultipliers = {}
+  multipliersDirty = true
+  inputCapacitance = INPUT_CAPACITANCE
+  inputResistanceValue = INPUT_RESISTANCE
+  feedbackCapacitance = FEEDBACK_CAPACITANCE
+  toneResistanceBase = TONE_RESISTANCE_BASE
+  toneCapacitance = TONE_CAPACITANCE
+  levelSquares = Object.fromEntries(COMPONENT_IDS.map((componentId) => [componentId, 0]))
+  levelSampleCount = 0
+  sampleCounter = 0
 
   constructor(config) {
     this.sampleRateHz = Math.max(config.sampleRate, 1)
@@ -288,7 +317,7 @@ class TubeScreamerWDFGraph {
     this.signalLatched = false
     this.prevOutput = 0
     this.driveResistor = new Resistor(mapDriveToResistance(config.drive))
-    this.feedbackCapacitor = new Capacitor(FEEDBACK_CAPACITANCE, this.sampleRateHz)
+    this.feedbackCapacitor = new Capacitor(this.feedbackCapacitance, this.sampleRateHz)
     this.feedbackSeries = new SeriesAdaptor(this.driveResistor, this.feedbackCapacitor)
     this.clippingParallel = new ParallelAdaptor(this.clippingDiodes, this.feedbackSeries)
     this.clippingRoot = new SeriesAdaptor(this.inputResistor, this.clippingParallel)
@@ -301,6 +330,7 @@ class TubeScreamerWDFGraph {
     this.levelTarget = this.level
 
     this.driveResistor.setParam(mapDriveToResistance(this.drive))
+    this.applyValueMultipliers()
     this.refreshNetworkResistances()
   }
 
@@ -325,6 +355,31 @@ class TubeScreamerWDFGraph {
     }
   }
 
+  setValueMultiplier(componentId, multiplier) {
+    const safeMultiplier = Math.max(0.25, Math.min(4, Number.isFinite(multiplier) ? multiplier : 1))
+    this.valueMultipliers[componentId] = safeMultiplier
+    this.multipliersDirty = true
+  }
+
+  getMultiplier(componentId) {
+    return this.valueMultipliers[componentId] ?? 1
+  }
+
+  applyValueMultipliers() {
+    if (!this.multipliersDirty) return
+
+    this.inputCapacitance = INPUT_CAPACITANCE * this.getMultiplier('ts-input-cap')
+    this.inputResistanceValue = INPUT_RESISTANCE * this.getMultiplier('ts-input-resistor')
+    this.feedbackCapacitance = FEEDBACK_CAPACITANCE * this.getMultiplier('ts-feedback-cap')
+    this.toneResistanceBase = TONE_RESISTANCE_BASE * this.getMultiplier('ts-tone-resistor')
+    this.toneCapacitance = TONE_CAPACITANCE * this.getMultiplier('ts-tone-cap')
+
+    this.inputResistor.setParam(this.inputResistanceValue)
+    this.feedbackCapacitor.setParam(this.feedbackCapacitance)
+    this.multipliersDirty = false
+    this.refreshNetworkResistances()
+  }
+
   refreshNetworkResistances() {
     this.feedbackSeries.refreshPortResistance()
     this.clippingParallel.refreshPortResistance()
@@ -333,6 +388,8 @@ class TubeScreamerWDFGraph {
   }
 
   updateSmoothedParams() {
+    this.applyValueMultipliers()
+
     const coeff = 0.01
 
     this.drive += (this.driveTarget - this.drive) * coeff
@@ -346,7 +403,7 @@ class TubeScreamerWDFGraph {
   processInputCoupling(sample) {
     if (this.bypassed.has('ts-input-cap')) return sample
 
-    const rc = INPUT_RESISTANCE * INPUT_CAPACITANCE
+    const rc = this.inputResistanceValue * this.inputCapacitance
     const dt = 1 / this.sampleRateHz
     const alpha = rc / (rc + dt)
     const output = alpha * (this.hpPrevOutput + sample - this.hpPrevInput)
@@ -391,15 +448,49 @@ class TubeScreamerWDFGraph {
     this.toneHPPrevInput = sample
     this.toneHPPrevOutput = highPassed
 
-    const toneResistance = mapToneToResistance(this.tone)
-    const lpRc = toneResistance * TONE_CAPACITANCE
+    const toneResistance = mapToneToResistance(this.tone, this.toneResistanceBase)
+    const lpRc = toneResistance * this.toneCapacitance
     const lpAlpha = dt / (lpRc + dt)
     this.toneLPState += lpAlpha * (highPassed - this.toneLPState)
 
     return this.toneLPState
   }
 
-  processSample(sample) {
+  addLevel(componentId, sample) {
+    const safeSample = Number.isFinite(sample) ? sample : 0
+    this.levelSquares[componentId] += safeSample * safeSample
+  }
+
+  captureStageLevels(coupled, clipped, toned, output) {
+    this.addLevel('ts-input-cap', coupled)
+    this.addLevel('ts-input-resistor', coupled)
+    this.addLevel('ts-clipping-diodes', clipped)
+    this.addLevel('ts-drive-pot', clipped)
+    this.addLevel('ts-feedback-cap', clipped)
+    this.addLevel('ts-tone-resistor', toned)
+    this.addLevel('ts-tone-cap', toned)
+    this.addLevel('ts-tone-pot', toned)
+    this.addLevel('ts-volume', output)
+    this.levelSampleCount += 1
+    this.sampleCounter += 1
+  }
+
+  flushLevelsIfNeeded(port) {
+    if (this.sampleCounter < LEVEL_REPORT_INTERVAL_SAMPLES || this.levelSampleCount <= 0) return
+
+    const levels = {}
+    COMPONENT_IDS.forEach((componentId) => {
+      const rms = Math.sqrt(this.levelSquares[componentId] / this.levelSampleCount)
+      levels[componentId] = Math.max(0, Math.min(1, rms))
+      this.levelSquares[componentId] = 0
+    })
+
+    this.levelSampleCount = 0
+    this.sampleCounter = 0
+    port.postMessage({ type: 'levels', levels })
+  }
+
+  processSample(sample, port) {
     this.updateSmoothedParams()
 
     const fallbackBase = Math.tanh(sample * (1 + this.drive * 6))
@@ -409,6 +500,7 @@ class TubeScreamerWDFGraph {
     const clipped = this.processClipping(coupled)
     const toned = this.processTone(clipped)
     const output = this.bypassed.has('ts-volume') ? toned : toned * this.level
+    this.captureStageLevels(coupled, clipped, toned, output)
 
     let safeOutput = output
     if (!Number.isFinite(safeOutput)) {
@@ -449,6 +541,7 @@ class TubeScreamerWDFGraph {
     }
 
     this.prevOutput = safeOutput
+    this.flushLevelsIfNeeded(port)
     return safeOutput
   }
 }
@@ -479,7 +572,14 @@ class WDFProcessor extends AudioWorkletProcessor {
       return
     }
 
-    this.graph.setBypassed(message.componentId, message.bypassed)
+    if (message.type === 'valueMultiplier') {
+      this.graph.setValueMultiplier(message.componentId, message.multiplier)
+      return
+    }
+
+    if (message.type === 'bypass') {
+      this.graph.setBypassed(message.componentId, message.bypassed)
+    }
   }
 
   process(inputs, outputs) {
@@ -504,7 +604,7 @@ class WDFProcessor extends AudioWorkletProcessor {
     }
 
     for (let i = 0; i < inputChannel.length; i += 1) {
-      outputChannel[i] = this.graph.processSample(inputChannel[i])
+      outputChannel[i] = this.graph.processSample(inputChannel[i], this.port)
     }
 
     return true

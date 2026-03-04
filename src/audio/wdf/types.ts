@@ -13,9 +13,19 @@ export interface WDFComponentMeta {
   name: string
   type: 'resistor' | 'capacitor' | 'diode' | 'opamp' | 'pot' | 'buffer'
   stage: string
+  circuitRole: 'series' | 'shunt' | 'feedback'
   description: string
   whyItMatters: string
   whatHappensWithout: string
+  whatHappensScaled: string
   realWorldValue?: string
   linkedParamId?: string
+  bypassSafe: boolean
+  bypassMode: 'short' | 'open' | 'substitute'
+  valueRange?: {
+    min: number
+    max: number
+    steps: number[]
+    unit: string
+  }
 }
