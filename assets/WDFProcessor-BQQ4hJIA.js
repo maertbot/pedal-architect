@@ -490,12 +490,11 @@ class TubeScreamerWDFGraph {
     this.preToneLPState += postLpAlpha * (sample - this.preToneLPState)
     const postFiltered = this.preToneLPState
 
-    // Active tone network pivot: 220R + 0..20k pot with 0.22uF branch (~3.2 kHz turnover near min R).
-    let toneResistance = mapToneToResistance(this.tone, this.toneResistanceBase)
+    // Active tone network pivot primarily set by 220R + 0.22uF branch (~3.2 kHz nominal).
+    // Tone pot mostly sets blend/feedback amount, not the corner itself.
+    let toneResistance = this.toneResistanceBase
     if (this.bypassed.has('ts-tone-resistor')) {
       toneResistance = Math.max(24, this.toneResistanceBase * 0.08)
-    } else if (this.bypassed.has('ts-tone-pot')) {
-      toneResistance = this.toneResistanceBase + TONE_POT_SPAN * 0.5
     }
 
     const toneCap = this.bypassed.has('ts-tone-cap') ? 1e-12 : this.toneCapacitance
@@ -506,11 +505,12 @@ class TubeScreamerWDFGraph {
     this.toneHPPrevOutput = shelfHigh
 
     const toneMix = clamp01(this.tone)
-    // At tone=0, extra high cut; at tone=1, largely neutral (TS bright end is compensation, not huge boost).
-    const shelfDb = -12 * (1 - toneMix)
-    const shelfGain = Math.pow(10, shelfDb / 20) - 1
+    // Schematic-faithful behavior target: primarily spectral tilt, limited loudness swing.
+    const highCoeff = -0.85 + toneMix * 1.65
+    const rawTone = postFiltered + shelfHigh * highCoeff
+    const makeup = 1 / (1 + Math.abs(highCoeff) * 0.35)
 
-    this.toneLPState = postFiltered + shelfHigh * shelfGain
+    this.toneLPState = rawTone * makeup
     return this.toneLPState
   }
 
