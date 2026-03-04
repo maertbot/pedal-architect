@@ -192,8 +192,8 @@ export const tubeScreamerWDF: CircuitModel = {
 
     const hasBiquad = typeof globalThis.BiquadFilterNode !== 'undefined'
 
-    const toneHighpassHz = 1 / (2 * Math.PI * TONE_HIGHPASS_RESISTANCE * TONE_HIGHPASS_CAPACITANCE)
-    const inputHP = hasBiquad ? new BiquadFilterNode(ctx, { type: 'highpass', frequency: toneHighpassHz, Q: 0.7 }) : null
+    const baseToneHighpassHz = 1 / (2 * Math.PI * TONE_HIGHPASS_RESISTANCE * TONE_HIGHPASS_CAPACITANCE)
+    const inputHP = hasBiquad ? new BiquadFilterNode(ctx, { type: 'highpass', frequency: baseToneHighpassHz, Q: 0.7 }) : null
     const toneLP = hasBiquad ? new BiquadFilterNode(ctx, { type: 'lowpass', frequency: mapToneToCutoffHz(0.5), Q: 0.8 }) : null
     const midShape = hasBiquad ? new BiquadFilterNode(ctx, { type: 'peaking', frequency: 900, Q: 0.95, gain: 2.5 }) : null
 
@@ -205,14 +205,48 @@ export const tubeScreamerWDF: CircuitModel = {
         ]
       : []
 
+    const multipliers: Record<string, number> = {}
+    const bypasses: Record<string, boolean> = {}
+    let toneValue = 0.5
+
+    const getMultiplier = (componentId: string): number => multipliers[componentId] ?? 1
+
+    const updateFilterVisualization = () => {
+      if (!toneLP || !inputHP || !midShape) return
+
+      const inputCap = (bypasses['ts-input-cap'] ? Number.MAX_VALUE : TONE_HIGHPASS_CAPACITANCE) * getMultiplier('ts-input-cap')
+      const inputRes = (bypasses['ts-input-resistor'] ? TONE_HIGHPASS_RESISTANCE * 0.08 : TONE_HIGHPASS_RESISTANCE) * getMultiplier('ts-input-resistor')
+      const inputCutoff = 1 / (2 * Math.PI * Math.max(1e-12, inputRes * inputCap))
+      inputHP.frequency.value = Math.max(20, Math.min(20_000, inputCutoff))
+
+      const toneResBase = TONE_RESISTANCE_BASE * getMultiplier('ts-tone-resistor')
+      const toneCap = TONE_CAPACITANCE * getMultiplier('ts-tone-cap')
+
+      let toneRes = toneResBase + (1 - clamp01(toneValue)) * TONE_POT_SPAN
+      if (bypasses['ts-tone-resistor']) toneRes = Math.max(24, toneResBase * 0.08)
+      if (bypasses['ts-tone-pot']) toneRes = Math.max(toneResBase, 24)
+
+      if (bypasses['ts-tone-cap']) {
+        toneLP.frequency.value = 20_000
+      } else {
+        const toneCutoff = 1 / (2 * Math.PI * Math.max(1e-12, toneRes * toneCap))
+        toneLP.frequency.value = Math.max(20, Math.min(20_000, toneCutoff))
+      }
+
+      midShape.gain.value = 1.5 + clamp01(multipliers['ts-drive-pot'] ?? 1) * 0.2 + clamp01((1 - toneValue)) * 0.8
+    }
+
+    updateFilterVisualization()
+
     return {
       input: node,
       output: node,
       setParameter: (paramId, value) => {
         node.setParameter(paramId, value)
 
-        if (paramId === 'tone' && toneLP) {
-          toneLP.frequency.value = mapToneToCutoffHz(value)
+        if (paramId === 'tone') {
+          toneValue = clamp01(value)
+          updateFilterVisualization()
         }
 
         if (paramId === 'drive' && midShape) {
@@ -220,10 +254,14 @@ export const tubeScreamerWDF: CircuitModel = {
         }
       },
       bypassComponent: (componentId, bypassed) => {
+        bypasses[componentId] = bypassed
         node.bypassComponent(componentId, bypassed)
+        updateFilterVisualization()
       },
       setComponentValueMultiplier: (componentId, multiplier) => {
+        multipliers[componentId] = multiplier
         node.setComponentValueMultiplier(componentId, multiplier)
+        updateFilterVisualization()
       },
       getComponentLevels: () => node.getComponentLevels(),
       onLevels: (callback) => {
