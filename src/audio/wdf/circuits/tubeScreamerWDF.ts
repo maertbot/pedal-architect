@@ -4,8 +4,8 @@ import { WDFWorkletNode } from '../WDFWorkletNode.js'
 
 const DRIVE_MIN_RESISTANCE = 51_000
 const DRIVE_SPAN_RESISTANCE = 500_000
-const TONE_MIN_CUTOFF_HZ = 720
-const TONE_MAX_CUTOFF_HZ = 4_500
+const TONE_MIN_CUTOFF_HZ = 250
+const TONE_MAX_CUTOFF_HZ = 9_000
 
 const clamp01 = (value: number): number => {
   if (value < 0) return 0
