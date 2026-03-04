@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { audioEngine, type SamplePreset } from './audio/AudioEngine'
 import { syncCircuitSelection } from './audio/syncCircuitSelection'
@@ -10,6 +10,8 @@ import { useStore } from './store/useStore'
 import { exportDrillTemplate } from './utils/pdfExport'
 
 function App() {
+  type EngineState = 'idle' | 'initializing' | 'ready'
+
   const currentCircuit = useStore((state) => state.currentCircuit)
   const parameters = useStore((state) => state.parameters)
   const audioPlaying = useStore((state) => state.audioPlaying)
@@ -29,25 +31,41 @@ function App() {
   const setLearnStep = useStore((state) => state.setLearnStep)
   const resetAllWdfComponents = useStore((state) => state.resetAllWdfComponents)
 
-  const [engineArmed, setEngineArmed] = useState(false)
+  const [engineState, setEngineState] = useState<EngineState>('idle')
+  const [showEngineOnline, setShowEngineOnline] = useState(false)
   const [initError, setInitError] = useState<string | null>(null)
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
+  const onlineTimeoutRef = useRef<number | null>(null)
 
   const isTablet = windowWidth < 1024
   const isMobile = windowWidth < 768
 
   const initEngine = useCallback(async () => {
+    if (engineState === 'ready') return true
+    if (engineState === 'initializing') return false
+
+    setEngineState('initializing')
+    setInitError(null)
     try {
       await audioEngine.init()
       syncCircuitSelection(audioEngine, currentCircuit, parameters)
-      setEngineArmed(true)
-      setInitError(null)
+      setEngineState('ready')
+      setShowEngineOnline(true)
+      if (onlineTimeoutRef.current !== null) {
+        window.clearTimeout(onlineTimeoutRef.current)
+      }
+      onlineTimeoutRef.current = window.setTimeout(() => {
+        setShowEngineOnline(false)
+      }, 400)
+      return true
     } catch (error) {
       console.error('Audio engine init failed', error)
       setInitError('AUDIO INIT FAILED — CLICK TO RETRY')
-      setEngineArmed(false)
+      setEngineState('idle')
+      setShowEngineOnline(false)
+      return false
     }
-  }, [currentCircuit, parameters])
+  }, [currentCircuit, engineState, parameters])
 
   const handleCircuitSelect = useCallback((circuitId: string) => {
     setCircuit(circuitId)
@@ -55,8 +73,9 @@ function App() {
   }, [parameters, setCircuit])
 
   const togglePlayback = async () => {
-    if (!engineArmed) {
-      await initEngine()
+    if (engineState !== 'ready') {
+      const ready = await initEngine()
+      if (!ready) return
     }
 
     if (audioPlaying) {
@@ -75,12 +94,12 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!engineArmed) return
+    if (engineState !== 'ready') return
     syncCircuitSelection(audioEngine, currentCircuit, parameters)
     // Parameter updates are applied directly through setParameter handlers.
     // Re-syncing on every parameter change can re-run setCircuit() and cause audible glitches.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentCircuit, engineArmed])
+  }, [currentCircuit, engineState])
 
   useEffect(() => {
     audioEngine.setSamplePreset(selectedSample)
@@ -93,8 +112,9 @@ function App() {
 
       if (event.code === 'Space') {
         event.preventDefault()
-        if (!engineArmed) {
-          await initEngine()
+        if (engineState !== 'ready') {
+          const ready = await initEngine()
+          if (!ready) return
         }
         if (audioPlaying) {
           audioEngine.stop()
@@ -136,7 +156,7 @@ function App() {
   }, [
     activeTab,
     enclosureSize,
-    engineArmed,
+    engineState,
     audioPlaying,
     isMobile,
     isTablet,
@@ -173,14 +193,28 @@ function App() {
   const handleFirstInteraction = async (
     event: ReactKeyboardEvent<HTMLDivElement> | ReactMouseEvent<HTMLDivElement>,
   ) => {
-    if (engineArmed) return
+    if (engineState === 'ready' || engineState === 'initializing') return
     if ('key' in event && event.key !== 'Enter') return
     await initEngine()
   }
 
+  useEffect(() => {
+    return () => {
+      if (onlineTimeoutRef.current !== null) {
+        window.clearTimeout(onlineTimeoutRef.current)
+      }
+    }
+  }, [])
+
   return (
     <div className="app-shell" onMouseDown={handleFirstInteraction} onKeyDown={handleFirstInteraction} role="application" tabIndex={0}>
-      {!engineArmed ? <div className="audio-overlay">{initError ?? 'CLICK ANYWHERE TO ARM AUDIO ENGINE'}</div> : null}
+      {(engineState !== 'ready' || showEngineOnline) ? (
+        <div className={engineState === 'initializing' ? 'audio-overlay initializing' : 'audio-overlay'}>
+          {showEngineOnline
+            ? 'ENGINE ONLINE'
+            : initError ?? (engineState === 'initializing' ? 'INITIALIZING ENGINE...' : 'CLICK ANYWHERE TO ARM AUDIO ENGINE')}
+        </div>
+      ) : null}
 
       <header className="topbar panel">
         <div className="brand">
@@ -193,7 +227,9 @@ function App() {
             CIRCUIT
             <select value={currentCircuit} onChange={(event) => handleCircuitSelect(event.target.value)}>
               {CIRCUITS.map((circuit, index) => (
-                <option key={circuit.id} value={circuit.id}>{`${index + 1}. ${circuit.name}`}</option>
+                <option key={circuit.id} value={circuit.id}>
+                  {`${index + 1}. ${circuit.engine === 'wdf' ? '◆ ' : ''}${circuit.name}`}
+                </option>
               ))}
             </select>
           </label>

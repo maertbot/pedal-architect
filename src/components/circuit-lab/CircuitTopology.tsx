@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CircuitTopologyData, TopologyConnection, TopologyNode } from '../../audio/wdf/topology'
 import type { WDFComponentMeta } from '../../audio/wdf/types'
 import { ComponentNode } from './ComponentNode'
@@ -109,11 +109,33 @@ export function CircuitTopology({
 }: CircuitTopologyProps) {
   const componentMap = useMemo(() => new Map(components.map((component) => [component.id, component])), [components])
   const highlightedSet = useMemo(() => new Set(highlightedComponents), [highlightedComponents])
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const [showOverflowHint, setShowOverflowHint] = useState(false)
+
+  useEffect(() => {
+    const element = scrollRef.current
+    if (!element) return
+
+    const updateOverflowHint = () => {
+      const overflows = element.scrollWidth - element.clientWidth > 1
+      const atRightEdge = element.scrollLeft + element.clientWidth >= element.scrollWidth - 1
+      setShowOverflowHint(overflows && !atRightEdge)
+    }
+
+    updateOverflowHint()
+    element.addEventListener('scroll', updateOverflowHint, { passive: true })
+    window.addEventListener('resize', updateOverflowHint)
+
+    return () => {
+      element.removeEventListener('scroll', updateOverflowHint)
+      window.removeEventListener('resize', updateOverflowHint)
+    }
+  }, [topology.viewBox.width, topology.nodes.length, selectedComponent, highlightedComponents.length])
 
   return (
     <section className="panel topology-panel">
       <div className="panel-title">SIGNAL TOPOLOGY</div>
-      <div className="topology-scroll">
+      <div ref={scrollRef} className={showOverflowHint ? 'topology-scroll has-overflow' : 'topology-scroll'}>
         <svg
           className="topology-svg"
           viewBox={`0 0 ${topology.viewBox.width} ${topology.viewBox.height}`}

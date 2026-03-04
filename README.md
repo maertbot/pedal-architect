@@ -1,73 +1,86 @@
-# React + TypeScript + Vite
+# Pedal Architect
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Interactive guitar effects pedal design workbench with component-level audio simulation.
 
-Currently, two official plugins are available:
+**[Live Demo →](https://maertbot.github.io/pedal-architect/)**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Features
 
-## React Compiler
+### Circuit Lab
+Real-time audio simulation of guitar effect circuits with interactive controls.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **15 circuits** — classic overdrives, distortions, fuzz, and modulation effects
+- **Oscilloscope** — real-time waveform and FFT visualization
+- **Frequency response** — analytical and live spectrum overlay
+- **Rotary knob controls** — adjust Drive, Tone, Level, and circuit-specific parameters
 
-## Expanding the ESLint configuration
+### WDF Engine (Component-Level)
+Three circuits use a Wave Digital Filter engine that models individual electronic components:
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- **Tube Screamer TS808** — feedback clipping with RC tone stage
+- **Big Muff Pi** — four cascaded clipping stages with LP/HP tone stack
+- **Klon Centaur** — parallel clean/drive blend with germanium diodes
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+Each WDF circuit includes:
+- **Interactive topology diagram** — click any component to inspect and modify it
+- **Component bypass** — remove individual parts and hear what changes
+- **Value scaling** — adjust component values (0.25×–4×) in real time
+- **Signal level meters** — see audio flow through each stage
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Learn Mode
+Guided step-by-step walkthroughs for each WDF circuit:
+- **22 lessons** across 3 circuits with interactive experiments
+- **Bypass experiments** — toggle components off to hear their contribution
+- **Value experiments** — scale component values and listen for tonal changes
+- **Knob experiments** — explore parameter ranges with guided listening cues
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Enclosure Designer
+Visual drag-and-drop pedal enclosure layout with PDF drill template export.
+
+## Tech Stack
+
+- React 19 + TypeScript + Vite
+- Web Audio API with AudioWorklet
+- Wave Digital Filter (WDF) engine — sample-by-sample component modeling
+- Zustand for state management
+- jsPDF for drill template export
+
+## Circuits
+
+| Circuit | Engine | Year | Category |
+|---------|--------|------|----------|
+| Tube Screamer TS808 | Legacy | 1979 | Overdrive |
+| **Tube Screamer TS808 (WDF)** | Component-Level | 1979 | Overdrive |
+| Big Muff Pi | Legacy | 1969 | Fuzz |
+| **Big Muff Pi (WDF)** | Component-Level | 1969 | Fuzz |
+| Klon Centaur | Legacy | 1994 | Overdrive |
+| **Klon Centaur (WDF)** | Component-Level | 1994 | Overdrive |
+| ProCo RAT | Legacy | 1978 | Distortion |
+| Fuzz Face | Legacy | 1966 | Fuzz |
+| Phase 90 | Legacy | 1974 | Modulation |
+| Boss DS-1 | Legacy | 1978 | Distortion |
+| Boss SD-1 | Legacy | 1981 | Overdrive |
+| Boss BD-2 | Legacy | 1995 | Overdrive |
+| Boss MT-2 | Legacy | 1991 | Distortion |
+| Ibanez TS9 | Legacy | 1982 | Overdrive |
+| MXR Distortion+ | Legacy | 1973 | Distortion |
+
+## Development
+
+```bash
+npm install
+npm run dev      # Start dev server
+npm run build    # Production build
+npm run lint     # ESLint check
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Deploy
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build
+npx gh-pages -d dist
 ```
+
+## License
+
+MIT

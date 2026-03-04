@@ -336,6 +336,8 @@ select,
 
 .topology-wrap {
   position: relative;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .reset-all-btn {
@@ -361,6 +363,18 @@ select,
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
+  position: relative;
+}
+
+.topology-scroll.has-overflow::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 30px;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(to left, rgba(10, 10, 10, 0.85), rgba(10, 10, 10, 0));
 }
 
 .topology-svg {
@@ -687,6 +701,26 @@ select,
   font-size: 11px;
 }
 
+.circuit-name-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.wdf-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #20ff60;
+  border: 1px solid rgba(32, 255, 96, 0.3);
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  vertical-align: middle;
+  text-transform: uppercase;
+}
+
 .circuit-meta {
   display: flex;
   justify-content: space-between;
@@ -817,6 +851,20 @@ select,
   color: var(--accent-amber);
   font-size: 16px;
   letter-spacing: 0.1em;
+}
+
+.audio-overlay.initializing {
+  animation: pulse-init 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-init {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .learn-shell {

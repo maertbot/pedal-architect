@@ -1,4 +1,37 @@
 const MIN_RESISTANCE = 1e-9
+const LN2 = 0.6931471805599453
+const INV_LN2 = 1.4426950408889634
+const _pow2Buffer = new ArrayBuffer(8)
+const _pow2F64 = new Float64Array(_pow2Buffer)
+const _pow2I32 = new Int32Array(_pow2Buffer)
+
+function fastPow2(power) {
+  if (power < -1022) return 0
+  if (power > 1023) return Infinity
+  _pow2I32[1] = (power + 1023) << 20
+  _pow2I32[0] = 0
+  return _pow2F64[0]
+}
+
+function fastExp(x) {
+  if (x > 709) return Infinity
+  if (x < -745) return 0
+
+  const power = (x * INV_LN2 + (x >= 0 ? 0.5 : -0.5)) | 0
+  const r = x - power * LN2
+  const r2 = r * r
+  const r3 = r2 * r
+  const r4 = r2 * r2
+  const r5 = r4 * r
+  const poly = 1 + r + 0.5 * r2 + (1 / 6) * r3 + (1 / 24) * r4 + (1 / 120) * r5
+
+  return fastPow2(power) * poly
+}
+
+function nowMs() {
+  if (globalThis.performance?.now) return globalThis.performance.now()
+  return Date.now()
+}
 
 class Resistor {
   constructor(resistanceOhms) {
@@ -159,7 +192,7 @@ class ParallelAdaptor {
 const DEFAULT_IS = 2.52e-9
 const DEFAULT_N = 1.752
 const DEFAULT_VT = 25.85e-3
-const MAX_NEWTON_ITERATIONS = 50
+const MAX_NEWTON_ITERATIONS = 8
 const NEWTON_TOLERANCE = 1e-6
 const MAX_EXP_ARGUMENT = 40
 
@@ -172,10 +205,18 @@ class DiodePair {
     this.Is = Is
     this.n = n
     this.Vt = Vt
+    this.updateConstants()
+  }
+
+  updateConstants() {
+    this.invTwoPortResistance = 1 / (2 * this.portResistance)
+    this.invNVt = 1 / (this.n * this.Vt)
+    this.diodeSlopeScale = this.Is * (0.5 * this.invNVt)
   }
 
   setPortResistance(value) {
     this.portResistance = Math.max(value, MIN_RESISTANCE)
+    this.updateConstants()
   }
 
   accept(wave) {
@@ -188,18 +229,14 @@ class DiodePair {
     return value
   }
 
-  equation(incident, reflected) {
-    const voltage = (incident + reflected) * 0.5
-    const arg = this.clampExpArg(voltage / (this.n * this.Vt))
-    const sinhTerm = Math.exp(arg) - Math.exp(-arg)
-    return (incident - reflected) / (2 * this.portResistance) - this.Is * sinhTerm
+  equation(incident, reflected, expArg, expNegArg) {
+    const sinhTerm = expArg - expNegArg
+    return (incident - reflected) * this.invTwoPortResistance - this.Is * sinhTerm
   }
 
-  derivative(incident, reflected) {
-    const voltage = (incident + reflected) * 0.5
-    const arg = this.clampExpArg(voltage / (this.n * this.Vt))
-    const coshTerm = Math.exp(arg) + Math.exp(-arg)
-    return -1 / (2 * this.portResistance) - this.Is * (0.5 / (this.n * this.Vt)) * coshTerm
+  derivative(expArg, expNegArg) {
+    const coshTerm = expArg + expNegArg
+    return -this.invTwoPortResistance - this.diodeSlopeScale * coshTerm
   }
 
   reflect() {
@@ -211,8 +248,12 @@ class DiodePair {
     let x = Number.isFinite(this.reflected) ? this.reflected : 0
 
     for (let iteration = 0; iteration < MAX_NEWTON_ITERATIONS; iteration += 1) {
-      const f = this.equation(this.incident, x)
-      const df = this.derivative(this.incident, x)
+      const voltage = (this.incident + x) * 0.5
+      const arg = this.clampExpArg(voltage * this.invNVt)
+      const expArg = fastExp(arg)
+      const expNegArg = fastExp(-arg)
+      const f = this.equation(this.incident, x, expArg, expNegArg)
+      const df = this.derivative(expArg, expNegArg)
 
       if (!Number.isFinite(df) || Math.abs(df) < Number.EPSILON) {
         break
@@ -1189,6 +1230,8 @@ const createGraphFromConfig = (config) => {
 class WDFProcessor extends AudioWorkletProcessor {
   graph = null
   startupSilentBlocks = 24
+  perfTotalMs = 0
+  perfBlockCount = 0
 
   constructor() {
     super()
@@ -1243,8 +1286,21 @@ class WDFProcessor extends AudioWorkletProcessor {
       return true
     }
 
+    const startTime = nowMs()
     for (let i = 0; i < inputChannel.length; i += 1) {
       outputChannel[i] = this.graph.processSample(inputChannel[i], this.port)
+    }
+    const elapsedMs = nowMs() - startTime
+
+    this.perfTotalMs += elapsedMs
+    this.perfBlockCount += 1
+    if (this.perfBlockCount >= 100) {
+      this.port.postMessage({
+        type: 'perf',
+        avgMsPerBlock: this.perfTotalMs / this.perfBlockCount,
+      })
+      this.perfTotalMs = 0
+      this.perfBlockCount = 0
     }
 
     return true

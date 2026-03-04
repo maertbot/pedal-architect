@@ -281,3 +281,28 @@
 - Ran `curl -sI https://registry.npmjs.org/<encoded-package>` for every package in `dependencies` and `devDependencies` from `package.json`.
 - Result: all checked registry URLs returned HTTP `200`.
 - No new CDN URLs or runtime external HTTP dependencies were introduced in this phase.
+
+## 2026-03-04 — Phase 5 Polish, Performance, Deploy
+
+### What Worked
+- Replacing `Math.exp()` with a range-reduced `fastExp()` plus cached exponential terms per Newton iteration reduced repeated nonlinear math in `DiodePair.reflect()` without changing solver structure.
+- Dropping `MAX_NEWTON_ITERATIONS` from `50` to `8` preserved convergence for normal signal levels while cutting worst-case per-sample work.
+- A small `engineState` state machine (`idle`/`initializing`/`ready`) made overlay UX transitions predictable and removed one-frame ambiguity during init.
+- Adding overflow detection directly in `CircuitTopology.tsx` enabled a right-edge scroll hint only when the topology is wider than the viewport.
+
+### What Broke / Fixes
+- Initial approximation idea (direct high-order polynomial over wide range) is unstable for larger magnitudes. Fix: switched to range reduction (`x = k*ln2 + r`) + low-order polynomial on bounded `r` and reconstructed with fast `2^k`.
+- Overlay timing could leak if init retriggered quickly. Fix: track timeout ID in a ref and clear on re-arm and unmount.
+
+### What Was Surprising
+- Most hot-path savings came from avoiding duplicate exp evaluations between `equation()` and `derivative()`, not just from a faster exp approximation.
+- The topology scroll indicator is clearer as a subtle edge fade than as an always-visible icon, especially on mobile.
+
+### How To Extend
+- If additional nonlinear elements are added, expose a shared per-iteration cache shape (`arg`, `expArg`, `expNegArg`) so each element does one exponential pair at most.
+- Add a dev-only perf panel in the main thread to display incoming worklet `{ type: 'perf' }` metrics and compare circuits under identical input blocks.
+- For deeper optimization passes, profile denormal handling and consider optional sample decimation for UI-level meters, keeping audio-rate DSP untouched.
+
+### Dependency Verification (2026-03-04, Phase 5)
+- Ran `curl -sI` against `https://registry.npmjs.org/<package>` for every package in `dependencies` and `devDependencies` from `package.json`.
+- Result: all package registry endpoints returned HTTP `200`.

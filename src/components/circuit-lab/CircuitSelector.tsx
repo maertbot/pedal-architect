@@ -20,7 +20,10 @@ export function CircuitSelector({ currentCircuit, onSelect }: CircuitSelectorPro
             <svg viewBox="0 0 44 32" className="circuit-icon">
               <path d={circuit.iconPath} />
             </svg>
-            <div className="circuit-name">{circuit.name}</div>
+            <div className="circuit-name-row">
+              <span className="circuit-name">{circuit.name}</span>
+              {circuit.engine === 'wdf' ? <span className="wdf-badge">COMPONENT-LEVEL</span> : null}
+            </div>
             <div className="circuit-meta">
               <span>{circuit.year}</span>
               <span>{circuit.category}</span>
