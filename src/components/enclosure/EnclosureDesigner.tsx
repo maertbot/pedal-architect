@@ -126,7 +126,15 @@ export function EnclosureDesigner() {
               ))}
             </select>
           </div>
-          <button className="action-btn" onClick={() => exportDrillTemplate(enclosureSize, placedComponents)} type="button">
+          <button
+            className="action-btn"
+            onClick={() => {
+              void exportDrillTemplate(enclosureSize, placedComponents).catch((error) => {
+                console.error('PDF export failed', error)
+              })
+            }}
+            type="button"
+          >
             EXPORT PDF
           </button>
           {selected ? (

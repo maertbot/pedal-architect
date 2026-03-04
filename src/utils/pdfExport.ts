@@ -1,10 +1,18 @@
-import { jsPDF } from 'jspdf'
 import { componentByType, getEnclosureById } from '../data/enclosures'
 import type { PlacedComponent } from '../audio/types'
 
 const MARGIN_MM = 15
+let jsPdfModulePromise: Promise<typeof import('jspdf')> | null = null
 
-export const exportDrillTemplate = (enclosureId: string, components: PlacedComponent[]) => {
+function loadJsPdf() {
+  if (!jsPdfModulePromise) {
+    jsPdfModulePromise = import('jspdf')
+  }
+  return jsPdfModulePromise
+}
+
+export const exportDrillTemplate = async (enclosureId: string, components: PlacedComponent[]) => {
+  const { jsPDF } = await loadJsPdf()
   const enclosure = getEnclosureById(enclosureId)
   const doc = new jsPDF({
     orientation: enclosure.widthMm > enclosure.heightMm ? 'landscape' : 'portrait',

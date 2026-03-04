@@ -16,6 +16,7 @@ const MIN_DB = -24
 const MAX_DB = 12
 const GRID_FREQS = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]
 const MOBILE_GRID_FREQS = [100, 1000, 10000]
+const RESPONSE_UPDATE_INTERVAL_MS = 80
 
 function toLabel(freq: number): string {
   if (freq >= 1000) {
@@ -98,6 +99,8 @@ export function FrequencyResponse({
 
     let rafId = 0
     const fftBuffer = analyser ? new Uint8Array(analyser.frequencyBinCount) : null
+    let response = computeFrequencyResponse(filterNodes, phaserConfig)
+    let responseUpdatedAt = performance.now()
 
     const draw = () => {
       const dpr = window.devicePixelRatio || 1
@@ -173,10 +176,12 @@ export function FrequencyResponse({
       ctx.stroke()
       ctx.restore()
 
-      const response = computeFrequencyResponse(filterNodes, phaserConfig)
-      const { frequencies, magnitudesDb, hasAnalytical } = response
-
       const now = performance.now()
+      if (now - responseUpdatedAt >= RESPONSE_UPDATE_INTERVAL_MS) {
+        response = computeFrequencyResponse(filterNodes, phaserConfig)
+        responseUpdatedAt = now
+      }
+      const { frequencies, magnitudesDb, hasAnalytical } = response
       const targetSpectrumOpacity = isPlaying ? 1 : 0
       const fadeRate = isPlaying ? 0.08 : 0.045
       spectrumOpacityRef.current += (targetSpectrumOpacity - spectrumOpacityRef.current) * fadeRate

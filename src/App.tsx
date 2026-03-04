@@ -155,7 +155,11 @@ function App() {
 
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'e') {
         event.preventDefault()
-        exportDrillTemplate(enclosureSize, placedComponents)
+        try {
+          await exportDrillTemplate(enclosureSize, placedComponents)
+        } catch (error) {
+          console.error('PDF export failed', error)
+        }
       }
     }
 
